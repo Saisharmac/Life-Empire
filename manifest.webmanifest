@@ -1,12 +1,19 @@
 {
-  "name": "LIFE & EMPIRE",
+  "id": "./",
+  "name": "LIFE & EMPIRE — Life Simulation",
   "short_name": "Life & Empire",
-  "description": "An India-first life simulation and empire-building game.",
+  "description": "An India-first life, family, education, banking, markets and business simulation.",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",
+  "display_override": ["standalone", "minimal-ui"],
   "orientation": "portrait",
-  "background_color": "#0a1014",
-  "theme_color": "#0a1014",
-  "icons": []
+  "background_color": "#090e16",
+  "theme_color": "#090e16",
+  "categories": ["games", "simulation", "entertainment"],
+  "icons": [
+    {"src": "./icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any"},
+    {"src": "./icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any"},
+    {"src": "./icons/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable"}
+  ]
 }

@@ -1,299 +1,198 @@
-# LIFE & EMPIRE — Game Master Blueprint
+# LIFE & EMPIRE — Game Master Blueprint v0.2.0
 
-**Current audited baseline:** Build 0.1.1. The current business payout system is intentionally a placeholder; see `ECONOMIC_ENGINE_AUDIT.md`.
+## 1. Product direction
 
-**Document version:** 0.1  
-**Playable build:** 0.1.0  
-**World setting:** India  
-**Currency approach:** Multi-currency  
-**Target:** Android-first mobile web game, hosted on GitHub Pages
+**Genre:** single-player life simulation + personal finance + light business/economic simulation.
 
----
+**Setting:** India-first, with nine playable city markets and a multi-currency personal wallet.
 
-## 1. Product vision
+**Platform:** static mobile-first web app, installable on supported Android/iOS browsers as a Progressive Web App. This build is not a native APK.
 
-LIFE & EMPIRE is a long-form life simulation in which a player begins as an ordinary young adult and can shape a complete life: education, work, relationships, money, businesses, ownership, travel and eventually a multi-company empire.
+**Design promise:** the player grows from birth, makes several choices in each quarter, manages interacting needs and relationships, learns at school, enters adult life, builds financial security and may eventually operate a connected group of businesses.
 
-The game should combine the quick decisions and life events of a personal life simulator with the deeper progression and management of a business/economy simulator. A player's path is open-ended: a stable employee life, a professional career, entrepreneurship, investing, property ownership or a combination of these should all be viable.
+## 2. Core time model
 
-The player should feel that decisions have consequences. Time, money, health, relationships, skills and opportunity must interact rather than operate as disconnected menus.
+- The character is born at age 0 in the starting year 2026.
+- The calendar contains four quarters per year.
+- The player receives **three decision points per quarter**.
+- A major action normally consumes one decision point. The player can combine several actions in one quarter, subject to the remaining points and each action's rules.
+- The player explicitly chooses **End quarter** to settle recurring systems and move to the next quarter.
+- Settlement restores the action-point allowance, performs income/cost/interest/production/market calculations, recovers some needs, and advances age by one year after the fourth quarter.
+- Banking transfers between the player's own cash/current/savings balances are treated as account administration; investment orders, borrowing, loan repayment, FX exchange and other material financial decisions consume a decision point.
 
-## 2. Locked product decisions
+## 3. Character foundation
 
-| Area | Locked decision |
-|---|---|
-| Product name | LIFE & EMPIRE |
-| Starting world | India |
-| Currency model | Multiple currency wallets, INR base accounting |
-| Primary device | Android phones |
-| Delivery | Static web app on GitHub Pages |
-| Runtime | HTML, CSS and vanilla JavaScript |
-| Backend | None in the first release |
-| Cost target | ₹0 hosting and no mandatory paid APIs |
-| Save model | Local device save plus manual JSON backup/restore |
+### Identity
 
-These are foundational constraints. New features should not introduce a paid service, mandatory account, framework build process or server dependency without a deliberate product decision.
+Character creation sets name, presentation, appearance style, starting city, family background, personality trait and whether a younger sibling will later join the household.
 
-## 3. Core player loop
+### Needs and attributes
 
-1. Review the character's condition, money, career, relationships and current quarter.
-2. Choose a meaningful action: work, study, exercise, rest, socialise, network, invest, build or relocate.
-3. The action consumes one quarter.
-4. The simulation settles income, business cash flow and living expenses.
-5. At the end of four quarters, the character ages by one year, investments are marked, career progression is evaluated and a life event may occur.
-6. New opportunities unlock as the character develops skills, qualifications, capital, relationships and experience.
-
-The time system is intentionally predictable: one major action equals one quarter; four completed actions equal one in-game year. Future features must use this same clock unless a documented exception is necessary.
-
-## 4. Character and life systems
-
-### 4.1 Character creation
-
-- Character name.
-- Indian starting city.
-- Family/economic background: working class, middle class or affluent.
-- Starting cash and living-cost assumptions vary by background.
-- The character starts at age 18 in the prototype.
-
-### 4.2 Personal attributes
-
-The initial attribute set is deliberately small and extensible:
+The player model includes:
 
 - Health
+- Energy
+- Stress
 - Happiness
-- Intelligence
+- Smarts
 - Fitness
+- Creativity
+- Discipline
 - Charisma
-- Age
-- Outstanding debt
+- Confidence
+- Social wellbeing
+- Resilience
 
-Attributes should have a purpose. Health and happiness should affect life outcomes; intelligence and skill development should influence education and work; charisma and relationships should influence social and professional opportunities.
+These are tracked separately. Actions can improve one attribute while consuming energy, adding stress, spending money or affecting relationships. Traits alter some learning, recovery, creative, work or finance effects. Very low energy or persistently high stress increases the risk of a burnout/illness event.
 
-### 4.3 Education and skills
+### Personality traits
 
-Four broad skill tracks are used in the first build:
+- Curious: gains more from learning.
+- Disciplined: recovers stress faster and receives a work-performance advantage.
+- Creative: benefits more from creative/social activities.
+- Resilient: reduces some stress/health penalties and improves recovery.
+- Social: builds relationships more quickly.
+- Cautious: receives a modest financial-decision advantage.
 
-- Technology
-- Business
-- Finance
-- Communication
+These are game modifiers, not psychological assessments.
 
-Education progression is High School → Diploma → Bachelor's Degree → Master's Degree. The prototype uses study actions as an abstracted time commitment. A later version can introduce institutions, fees, scholarships, entrance exams, course durations and subject choices without changing the underlying character schema.
+## 4. Life stages and decisions
 
-### 4.4 Career
+### Infancy (0–2)
 
-Career progression should include applications, qualification checks, salaries, experience, promotions, job changes and unemployment. Jobs should have different requirements and salary bands. Future versions should add sectors, employers, job markets, role levels, performance reviews, layoffs and remote/international jobs.
+Available caregiver-led choices include bonding, sensory play, sleep, health checks and stories. The player is not treated as an independent worker or investor. Household resources fund care.
 
-### 4.5 Relationships and family
+### Early childhood (3–5)
 
-The prototype begins with family, friends and professional network indicators. Future phases should add parents, siblings, partner, marriage, children, caregiving, family events and relationship consequences. Relationship content should be respectful and choice-driven; it should not reduce people to simple purchasable resources.
+Play, reading, social play, simple chores, sleep and health checks introduce curiosity, early learning, discipline and relationships.
 
-## 5. Economy and multi-currency model
+### School years (6–12)
 
-### 5.1 Accounting design
+Grade 1 begins at age six. School attendance, study, sports, friends, hobbies, family time and rest influence marks, skills and wellbeing.
 
-- INR is the base accounting currency for the India starting world.
-- Wallets are maintained separately for INR, USD, AED, SGD, GBP and EUR.
-- Each wallet is displayed in its own currency and can be converted into another wallet.
-- In-game exchange rates are simulation constants and are not presented as live market data.
-- Exchange fees are part of the game economy.
+### Adolescence (13–17)
 
-### 5.2 Income and expenditure
+School and exam preparation continue. Clubs, sports, skills, friendships and family time allow the player to balance academic performance, interests and social development.
 
-Income sources planned:
+### Adulthood (18+)
 
-- Employment salary
-- Freelance and contract work
-- Business operating profit
-- Investment returns
-- Rental income and asset proceeds
-- International work and trade
+College and postgraduate study, employment, freelance work, exercise, rest, family/social life, networking, dating, banking, investment, property and business ownership become available according to eligibility and affordability.
 
-Expense categories planned:
+### Later life and legacy
 
-- Daily and household living costs
-- Education and training
-- Transport and travel
-- Healthcare
-- Family and social events
-- Business operating costs
-- Taxes and fees
-- Asset maintenance and debt service
+Health and wellbeing influence the later-life state. The simulation introduces increasing mortality risk from advanced age. On death, it presents a legacy view with years lived, net worth, companies and children recorded.
 
-### 5.3 Capital and investment
+## 5. Family and household economy
 
-Initial prototype instruments:
+Family background selects initial household funds, recurring income and expenses, school-fee capacity, pocket-money support and a transition grant at adulthood. During childhood, the household pays basic living and school costs; the child receives pocket money. Household financial pressure can lower support and raise the character's stress. Parent ages and child/family relationships progress over time.
 
-- Fixed deposit
-- Index fund
-- Gold
+Family members are represented as simplified relationship and household entities. They are not yet independently simulated NPCs with their own full careers, budgets and daily schedules.
 
-Planned instruments and systems:
+## 6. Education and career
 
-- Savings and current accounts
-- Loans, credit cards and credit score
-- Bonds and government securities
-- Stocks and diversified funds
-- Real estate and rent
-- Vehicles and depreciating assets
-- Insurance and emergency expenses
-- Taxation and inflation
+- School starts at age six and advances through Grade 12.
+- Attendance and study effort combine with smarts, stress and a random result factor to determine marks.
+- Passing the Grade 12 threshold unlocks the base school qualification.
+- College and postgraduate programs are abstracted into study quarters and tuition costs.
+- Jobs have qualification, skill and salary requirements.
+- Applications use a probability influenced by skills, education, smarts, confidence and experience.
+- Employed characters receive salary at quarter settlement. Work actions increase experience/performance; tenure increments once per completed employed quarter.
+- Promotions require performance/tenure progress and increase salary.
 
-Returns must be simulated, clearly labelled as game mechanics and balanced for playability. They must not be marketed as financial advice or real-world forecasts.
+Job titles and employers are fictional. There is no live job-board connection.
 
-## 6. Business and empire systems
+## 7. Personal banking and markets
 
-The business system should evolve in layers:
+### Accounts and currency
 
-1. Launch a small venture using personal capital.
-2. Track revenue, expenses, profit, cash reserves and business value.
-3. Reinvest to upgrade capacity and earning potential.
-4. Hire employees and delegate operations.
-5. Add locations, products, departments and management structure.
-6. Create multiple companies and group ownership.
-7. Add holding companies, subsidiaries, financing, competition and international expansion.
+The player has pocket cash, a current account, savings account and six currency wallets: INR, USD, AED, SGD, GBP and EUR. Internal account transfers move value between personal balances. FX exchange uses the build's fixed reference rates and a conversion spread. The rates are game parameters and do not update from live markets.
 
-Prototype businesses are simplified examples (food stall, online store, farm and software studio). They establish the data model, not the final business simulation.
+### Savings and deposits
 
-## 7. India world model
+- Savings earn simulated quarterly interest based on a 3.5% annual rate.
+- Fixed deposits have 1-, 2- or 3-year terms, a fixed rate, accrued interest and maturity repayment to savings.
+- Active deposits and accrued interest contribute to net worth.
 
-India is the initial playable country. The first build includes nine city choices: Hyderabad, Bengaluru, Mumbai, Delhi, Chennai, Pune, Kolkata, Jaipur and Ahmedabad. Each has a simulated cost index and broad economic character.
+### Credit and protection
 
-Future world content should add:
+- Personal loans have principal, rate, term and scheduled instalments.
+- The repayment schedule includes interest and principal. Unpaid amounts can carry and affect the credit score.
+- Emergency borrowing may cover an adult's living-cost shortfall or a simulated medical shock.
+- Basic health cover is a simplified, time-limited policy.
+- The credit score is a game statistic, not a real bureau score or credit report.
 
-- More Indian cities and rural locations.
-- States and regional differences.
-- Sector-specific job and business opportunities.
-- Property and transport markets.
-- Domestic travel and relocation.
-- International countries, currencies, work permits and trade links.
-- Economic cycles, inflation, interest rates and policy events.
+### Capital markets
 
-The game should use invented or abstracted data when detailed regional modelling is not available. It must not imply that simplified game values are official current economic statistics.
+- Eight fictional listed companies have prices, volatility, growth assumptions and dividend rates.
+- A lightweight market index, sentiment, inflation, policy rate and unemployment indicators update quarterly.
+- Share purchases/sales, mutual-fund units and digital gold are tracked in the player's portfolio.
+- Dividends are credited quarterly. Fund NAV, share prices and gold prices are simulated from game formulas and random factors.
+- Market dealing unlocks at age 18.
 
-## 8. User experience principles
+No real securities, broker, exchange, payment rail, banking API or investment account is connected.
 
-- Mobile-first layout designed for one-handed use.
-- Dark, premium, readable interface with restrained gold accents.
-- A small number of clear top-level sections.
-- Important decisions should display costs, requirements and time consequences before execution.
-- The player must receive clear feedback for success, failure and insufficient funds.
-- Avoid unnecessary confirmation dialogs for ordinary actions.
-- Save automatically after meaningful state changes.
-- Provide export and import backups before any destructive save operation.
-- Keep game rules discoverable in the interface.
+## 8. Property
 
-## 9. Technical architecture
+The player may buy one of several simplified residential/commercial property types. Property adds an asset value and recurring rent, but also maintenance. Purchases are cash-based; mortgages and property debt are not implemented.
 
-### 9.1 Hosting
+## 9. Company and production model
 
-The project is a static site. GitHub Pages serves the HTML, CSS, JavaScript, manifest and service worker. No npm install or compile stage is required.
+### Firm types
 
-### 9.2 Application layers
+1. Paddy Farm — produces paddy.
+2. Rice Mill — purchases paddy and produces rice.
+3. Grocery Store — procures rice and sells retail baskets to household demand.
+4. Electronics Workshop — purchases components and assembles devices.
+5. Software Studio — delivers software contracts.
 
-- `index.html`: application shell and metadata.
-- `styles.css`: responsive interface and visual system.
-- `game.js`: game state, actions, economy, progression, rendering and backup functions.
-- `manifest.webmanifest`: installable web app metadata.
-- `service-worker.js`: static shell caching for supported HTTPS use.
+The player can own up to five companies, limited to one per type.
 
-### 9.3 Persistence
+### Firm-level records
 
-The first build uses browser `localStorage` for a single local save. JSON export and import are included. A later version may migrate to IndexedDB if the save grows large. There is no cloud sync in the first build.
+Each company has its own cash balance, registered city, employees, wage/payroll costs, capacity, inventory, quality, price, brand/marketing, sales, revenue, operating costs, profit, estimated value and quarterly history.
 
-### 9.4 Versioning rule
+### Supply chain
 
-Each milestone is delivered as a complete, internally consistent project snapshot. Avoid long chains of tiny manual patches. Before a new milestone, preserve the previous working version and document schema changes and migration behaviour.
+The first connected production chain is:
 
-## 10. Build roadmap and acceptance gates
+**Paddy Farm → Rice Mill → Grocery Store → Household customers.**
 
-### Build 0.1 — Playable foundation (included)
+Owned upstream firms can transfer stock to owned downstream firms. When owned supply is unavailable or insufficient, the model purchases from simulated outside suppliers. Farm output, mill conversion, inventory affordability, store demand and sales are settled each quarter. Other businesses have simplified input-procurement or contract-demand models.
 
-- Character creation and starting backgrounds.
-- India cities and quarterly calendar.
-- Attributes and basic actions.
-- Career applications, education and skills.
-- Relationships.
-- Multi-currency wallets and exchange.
-- Three investment types.
-- Basic business launch and upgrade.
-- Local save, JSON export/import.
-- GitHub Pages-ready static project.
+### Demand and price
 
-**Acceptance gate:** A new player can create a character, complete multiple actions, age into a new year, earn and spend money, apply for a job, hold multiple currencies, start a business and restore a JSON backup.
+Retail demand is influenced by the firm's city demand, market sentiment, product quality, brand/marketing, asking price and a simplified competition factor. This is a starter demand model rather than an independently operating rival-company simulation.
 
-### Build 0.2 — Business & Market Simulation (priority pivot)
+### Management choices
 
-This milestone now takes priority over additional life events because the Capitalism Lab-style business economy is a central part of the product promise. Build it as a coherent, testable economic loop—not as a large collection of disconnected business buttons.
+The player can establish firms, inject or withdraw capital, change prices, hire or fire staff, spend on quality/marketing, and distribute owner funds. Company wages and operating expenses are separate from the player's personal wallet. Firms remain in their registered city if the character relocates.
 
-- **City markets:** population, household income, unemployment, wages, foot traffic, category demand and a local cost/price index.
-- **Products:** product catalogue with units, quality, product classes, demand segments and lifecycle stage.
-- **Supply chain:** suppliers, raw materials, intermediate goods, recipes, purchase orders and delivery lead times.
-- **Production:** farms/factories, input consumption, capacity, output, labour, utilities, waste and downtime.
-- **Inventory:** stock on hand, storage capacity, replenishment, stockouts, spoilage for perishable goods and stock transfers.
-- **Retail:** store location, foot traffic, price, quality, customer conversion, units sold, revenue and market share.
-- **Competition:** a small number of AI firms with their own products, prices, capacity and expansion choices.
-- **Company accounting:** revenue, cost of goods sold, payroll, rent, utilities, marketing, tax, operating profit, cash flow and business valuation.
-- **Reports:** product profitability, supply status, store performance, company P&L and city market overview.
+## 10. World and relationships
 
-**First playable chain:** use a focused Indian staple-goods chain such as paddy farm → rice mill → packaged rice → grocery retail → households. The player must be able to trace how much input is purchased, how much is processed, how much stock reaches the store, how much sells, and what margin remains after all costs. Start in one city and with a small product catalogue before widening the simulation.
+Nine cities are represented: Hyderabad, Bengaluru, Mumbai, Delhi, Chennai, Pune, Kolkata, Jaipur and Ahmedabad. Cities have cost, demand and wage indexes. These are fictional game modifiers, not precise real-world city statistics.
 
-**Acceptance gate:** (1) no input means no production; (2) production consumes the specified inputs and creates the specified output; (3) no inventory means no retail sales; (4) sales cannot exceed available stock or consumer demand; (5) price, quality and location change sales; (6) operating profit reconciles exactly to revenue minus itemised costs; (7) suppliers and competitors can change the player's input cost and sales; and (8) the same state survives save/export/import/reload without duplication or lost units.
+The relationship layer supports family/friends, networking, dating, proposals, marriage and children. Children age annually. This layer is foundational; NPCs do not yet have full independent lives or autonomous decision-making.
 
-### Build 0.3 — Personal finance & capital markets
+## 11. Save and install architecture
 
-- Savings/current accounts and recurring transactions.
-- Loans, EMI schedules, credit limits and credit score.
-- Property, vehicles, rental income and depreciation.
-- Tax, insurance and business financing abstractions.
-- Investment risk, portfolio allocation and event-driven returns.
-- Company shares, valuation, private funding and a basic public market only after company accounts are reliable.
+- Vanilla HTML, CSS and JavaScript; no build tool or server is required.
+- Save state is local to the current browser profile.
+- JSON backup export/import is available.
+- Version 0.2 uses a new storage schema. Old v0.1.x save data is left intact; automatic migration is not claimed.
+- A web app manifest, PNG icons and service worker support installation and core-asset caching.
+- GitHub Pages HTTPS can host the static PWA.
+- Installing on Android creates a browser-managed installed web app/home-screen app experience. It does not produce an APK or Play Store publication.
 
-**Acceptance gate:** Personal and company finances remain separate, balances reconcile, debt schedules are explicit, investment returns do not create unexplained money, and the player can manage a multi-year personal balance sheet.
+## 12. Current scope boundaries
 
-### Build 0.4 — Life depth
+Not yet implemented at full depth: AI-controlled rival firms, detailed national supply/demand equilibrium, multiple independent product markets, logistics/warehousing, long-term supply contracts, detailed tax system, mortgages, bonds, credit cards, real bank/broker connections, a realistic demographic model, fully autonomous family NPCs, comprehensive school/university admissions, multiplayer and native Android packaging.
 
-- More complete job market and career ladders.
-- Course/institution model and education costs.
-- Health events and recovery choices.
-- Family members, friendship events, dating, marriage and children foundations.
-- Life-event engine with meaningful choice outcomes.
-- Achievements and milestone tracking.
+## 13. Next economic milestones
 
-**Acceptance gate:** A player can experience a coherent multi-year personal life, and career, health, family and money decisions have consistent consequences.
-
-### Build 0.5 — Corporate management, empire & global expansion
-
-- Business financial statements, cash flow, financing and governance beyond the first playable vertical slice.
-- Employees, department managers, training, productivity and executive delegation.
-- Branch networks, capacity expansion, marketing, brand investment and business risk.
-- Holding-company and subsidiary structures, ownership shares and acquisitions.
-- Public listings, share issuance and investor relations after company accounts are stable.
-- Foreign employment, international assets, cross-border trade and more countries.
-
-**Acceptance gate:** The player can operate multiple connected firms, delegate routine decisions, finance expansion and understand group-wide profit, cash and ownership without breaking the underlying accounting.
-
-### Build 0.6 — Release hardening
-
-- Long-run simulation balancing.
-- Mobile viewport and Android Chrome testing.
-- Save migration, backup integrity and recovery tests.
-- Accessibility, performance and offline tests.
-- Tutorial, help and clear version notes.
-
-**Acceptance gate:** No known data-loss path in normal use, no blocker in the main game loop, and a reproducible GitHub Pages deployment.
-
-## 11. Explicitly out of scope for prototype 0.1
-
-- Multiplayer, chat or social accounts.
-- Cloud save and cross-device synchronisation.
-- Real-money trading or real financial account connections.
-- Live exchange-rate feeds.
-- Paid APIs, mandatory subscriptions or server-hosted services.
-- Large-scale map rendering or 3D graphics.
-
-These can be reconsidered later, but should not compromise the zero-cost static deployment target.
-
-## 12. Known prototype limitations
-
-Build 0.1.1 uses simplified fixed game rates, random job outcomes and abstracted annual investment returns. Business profit is represented as a fixed quarterly amount per business level. It does not yet model the full family lifecycle, healthcare system, loans, detailed accounting, property ownership, taxes or international travel. These are planned systems, not completed features.
+1. Add independent rival firms and market share calculation.
+2. Add supplier contracts, procurement quotes, transport costs and warehousing.
+3. Add multiple product classes and elastic demand by customer segment.
+4. Add full company income statements, balance sheets and cash-flow statements.
+5. Add industry cycles, GDP/unemployment/inflation feedback and fiscal/tax systems.
+6. Add corporate finance, debt, equity issuance and acquisitions.
+7. Add simulation balancing and long-run scenario testing.
