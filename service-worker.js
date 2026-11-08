@@ -1,8 +1,9 @@
-const CACHE_NAME = 'life-and-empire-v0.3.0';
+const CACHE_NAME = 'life-and-empire-v0.7.0';
 const CORE_ASSETS = [
   './',
   './index.html',
   './styles.css',
+  './content/catalog.js',
   './game.js',
   './manifest.webmanifest',
   './icons/icon-192.png',
