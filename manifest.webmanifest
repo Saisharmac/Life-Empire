@@ -1,0 +1,12 @@
+{
+  "name": "LIFE & EMPIRE",
+  "short_name": "Life & Empire",
+  "description": "An India-first life simulation and empire-building game.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#0a1014",
+  "theme_color": "#0a1014",
+  "icons": []
+}
