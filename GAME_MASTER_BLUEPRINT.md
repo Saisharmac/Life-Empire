@@ -196,3 +196,40 @@ Not yet implemented at full depth: AI-controlled rival firms, detailed national 
 5. Add industry cycles, GDP/unemployment/inflation feedback and fiscal/tax systems.
 6. Add corporate finance, debt, equity issuance and acquisitions.
 7. Add simulation balancing and long-run scenario testing.
+
+---
+
+# v0.3.0 Interface and Economy Design Addendum
+
+## Fixed game screen
+
+The primary play screen is an instrument-panel layout rather than a scrolling story:
+
+- **Top ~20%:** compact identity and finance HUD. Character name, age/life stage, city, wellbeing meters, cash, net worth, quarterly flow and decision slots remain visible.
+- **Middle ~60%:** selected dashboard. Life shows live events and current context; other tabs expose character, schooling, banking, markets, economic accounts, empire and world.
+- **Bottom ~20%:** compact context-sensitive action dock, More Actions, End Quarter and eight section tabs.
+
+The app frame uses `100dvh`, body/app overflow is hidden during gameplay, and dense modal forms scroll inside their own modal. The setup form is an onboarding screen and may scroll on short displays; the no-scroll requirement applies to the active game interface.
+
+## Quarterly interaction contract
+
+Each quarter grants three action slots. Multiple actions may be combined before settlement. A successful action can use a slot and wellbeing resources such as energy; quarter settlement processes household, school/college, salaries, businesses, bank operations, loans, deposits, markets and age progression. Banking/market/business management actions use the same quarterly decision budget where implemented as strategic actions; simple transfers are treated as cash movements and are not earnings.
+
+## Economic dashboard contract
+
+Personal finance, company accounting and bank accounting are related but separate views:
+
+- Personal cash flow distinguishes money earned, support, asset-sale proceeds, financing, expenses, asset purchases and debt payments.
+- Market valuation changes are shown as non-cash revaluations.
+- Company revenue, costs and profit are separate from owner distributions.
+- Bank vault cash, deposit liabilities, loan assets, fixed branch assets and profit/loss are separated from the player's own balance sheet.
+
+A loan is not income. A deposit withdrawal is not new income. A bank's loan to its owner is an asset to the bank and a liability to the player. Branch acquisition is a capitalised bank asset, not an operating expense.
+
+## Player-owned banking
+
+The player can own up to three distinct banks. Each has ₹50 lakh in paid-up capital plus ₹35 lakh setup cost at formation. The owner can attract deposits, set deposit and loan rates, issue aggregated public loans, provide a related-party loan to the player subject to liquidity, repay early, and expand branches. Branches raise deposit growth potential and recurring operating cost. Bank accounting is kept separately from household accounts.
+
+## Investment screen
+
+The Market screen borrows interaction conventions from mobile tycoon games: a compact quote list, visible prices and changes, sorting chips, explicit buy/sell order forms and concise portfolio totals. The visual system is original. The game exchange remains fictional and offline; no live quotes, order routing or broker integrations are used.

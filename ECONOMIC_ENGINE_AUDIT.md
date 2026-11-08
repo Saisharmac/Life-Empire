@@ -1,95 +1,76 @@
-# Economic Engine Review — LIFE & EMPIRE v0.2.0
+# Economic Engine Audit — LIFE & EMPIRE v0.3.0
 
-## Overall verdict
+## Purpose
 
-**Improved to a foundational business-and-market simulation; not yet equivalent to Capitalism Lab.**
+This build separates the player's household cash flow from asset purchases, debt financing, trading proceeds, company results and owned-bank accounting. It is a fictional turn-based game economy, not a real banking or brokerage product.
 
-Version 0.2.0 replaces the previous fixed quarterly business payout with a basic quarter-settled operating model. Personal banking and market investments are also substantially expanded. The economic simulation is still deliberately smaller and more abstract than a full tycoon/economy game.
+## Personal finance classification
 
-## Personal finance systems
+The current-quarter ledger uses distinct buckets:
 
-| System | Current behaviour | Boundary |
-|---|---|---|
-| Pocket cash | Holds personal spending money | Not a payment network |
-| Current account | Cash-like bank balance | No bank-specific transfer rails |
-| Savings | Earns simulated 3.5% annual interest, credited quarterly | Fixed game rate |
-| Fixed deposits | 1/2/3-year terms, accrued interest and maturity | No early-break penalty modelling |
-| Personal loans | Principal, rate, term, scheduled principal/interest instalments | No real credit bureau or lender underwriting |
-| Credit score | Changes with repayment performance | Game score only |
-| Health cover | Simple time-limited policy | Not a detailed insurance contract |
-| Currency exchange | Six currency wallets with fixed reference exchange rates and a spread | No live FX rates; no forex market orders |
-| Shares | Eight fictional securities; buy/sell, price changes and dividends | No real exchange, order book, trading hours or company financial statements |
-| Mutual fund | Units and a simulated NAV | No underlying holdings, fees or fund manager simulation |
-| Digital gold | Grams and a simulated per-gram price | Not linked to bullion markets |
-| Property | Cash-based purchase, recurring rent and maintenance | No mortgages, vacancies, taxes or property market transactions |
+- **Earned income:** salary, work/freelance income and savings interest.
+- **Household support:** family/household transfers.
+- **Asset-sale proceeds:** cash from selling securities, fund units, gold or withdrawing previously held bank deposits where the action represents disposal of an asset. (A transfer from the player's deposit at their own bank back to current cash is now treated as an internal transfer, not income.)
+- **Financing:** personal and owner-bank loan proceeds; these are cash received but are not earnings.
+- **Expenses:** living, operating and other consumption costs.
+- **Investments:** stock/fund/gold/FD/property/company/bank-capital purchases.
+- **Debt service:** principal/interest payments classified as debt-related cash outflow.
+- **Market valuation change:** non-cash revaluation from simulated markets and asset values.
 
-### Accounting rule
+The Economy tab shows the net cash-flow view as well as household cash flow, company revenue/costs/profit and owned-bank profit. It labels asset purchases separately from operating costs. Loan proceeds are explicitly not treated as income.
 
-Net worth includes personal cash/current/savings balances, stock/fund/gold valuations, fixed-deposit principal **plus accrued interest**, property/business value, less outstanding loan balances. Business working capital remains on the company side and is included through company value rather than being added to the personal cash balance.
+## Stock market and investments
 
-## Business engine
+The game has fictional securities with simulated prices, price changes and dividends. The Market tab supports sort modes for market movers, price, dividend and name, and per-security buy/sell forms. Share purchases/sales use a simulated brokerage fee. A mutual fund uses a simulated NAV. Digital gold is priced per gram. Fixed deposits have fixed rates and maturities. Currency conversion is simulated with a spread.
 
-### Company operating loop
+No prices are live, no real order routes exist, and no broker/bank accounts are connected.
 
-At each quarter settlement, each company attempts to operate within its staffing, production capacity, stock availability and cash affordability. It calculates output or deliverable capacity, buys required inputs, pays wages and overhead, carries inventory, sells units into simulated demand, records revenue/costs/profit and updates an estimated value/history.
+## Owned-bank model
 
-### Current firm set
+A player can establish up to three banks. Each new bank requires ₹85 lakh: ₹50 lakh paid-up capital and ₹35 lakh setup/licence/systems costs. This is an in-game price, not a statement about real regulatory capital requirements.
 
-| Company | Main activity | Primary economic role |
-|---|---|---|
-| Paddy Farm | Produce paddy | Agricultural supplier |
-| Rice Mill | Convert paddy to rice | Manufacturer |
-| Grocery Store | Sell retail baskets | Retailer |
-| Electronics Workshop | Assemble devices from components | Manufacturer |
-| Software Studio | Deliver software contracts | Services firm |
+Each bank records:
 
-### Connected production chain
+- Vault cash (liquid funds)
+- Capitalised fixed assets (branch network assets)
+- Customer deposit liabilities
+- Aggregate public loan book
+- Loans to the player/owner (related-party loan assets)
+- Owner deposits (both player's asset and bank liability)
+- Annual deposit rate and quarterly lending rate
+- Branch count, trust and quarterly operating cost
+- Revenue, deposit costs, operating costs, profit/loss and limited history
 
-**Farm paddy → mill rice → grocery retail basket → households.**
+### Owner loans
 
-Owned upstream stock can feed the player's downstream company. When it cannot meet a downstream firm's stock need, a simplified external supplier provides the remainder, subject to available company cash. Internal transfers are accounted for as a cost to the downstream firm and revenue to the supplying firm. Company city is independent of the player's residential city.
+A loan from an owned bank transfers cash from the bank vault to the player's current account. The player's liability is recorded in `playerLoans`, while the same outstanding balance is recorded as a bank asset. Loan terms can be 1, 2, 3 or 4 simulated years (4, 8, 12 or 16 quarters). Scheduled principal and quarterly interest are collected at settlement when the player's funds are sufficient; missed instalments capitalise interest and reduce bank trust. Extra repayments reduce personal debt and increase bank cash.
 
-### Demand and pricing
+### Deposits and withdrawals
 
-Grocery and other firm demand is a simplified function of local demand, market sentiment, price, quality, brand/marketing and a fixed competition factor. The player can modify prices, hire/fire, spend on quality/marketing and inject/withdraw company capital. There is one company per firm type and a five-company ownership cap.
+Depositing personal cash increases the player's deposit asset and the bank's deposit liability while transferring money into bank vault cash. Withdrawing reduces both the player's deposit and the bank liability while moving funds back to current cash. A deposit withdrawal is not new earned income.
 
-## Reconciliation and known limitations
+### Bank rates and branches
 
-- Company cash is separate from personal cash.
-- Wages and overhead are paid from company cash.
-- Inventory carries from quarter to quarter.
-- Production and sales cannot exceed modeled capacity or available inputs.
-- Internal supply-chain purchases must be affordable to the buying company.
-- Company settlement is quarterly; there is no real-time production or intraday sales.
-- Outside suppliers are a simplified balancing mechanism, not a modeled supplier network.
-- No autonomous AI-owned competing companies currently make their own investment, procurement, staffing, pricing and expansion decisions.
-- Market demand does not yet clear through a national equilibrium or input-output matrix.
-- There is no sophisticated accounting for taxes, depreciation, debt covenants, interest on company loans, working-capital cycles, logistics, warehousing, spoilage or multi-product retail inventory.
-- Market indicators (inflation, repo rate, unemployment, sentiment) are game signals rather than a calibrated macroeconomic model.
-- Stock fundamentals and prices are fictional. This is not a financial model for real investing.
+The player can set quarterly lending rates between 0.8% and 4.0%, and annual savings/deposit rates between 0.5% and 10.0%. Rate changes use a quarterly decision. Opening a branch costs ₹12.5 lakh from bank vault cash, increases branch count and capitalised fixed assets, improves deposit-attraction capacity and raises quarterly running costs.
 
-## Comparison with the design target
+### Liquidity and lending
 
-| Capability | v0.2.0 status |
-|---|---|
-| Own and operate different firm types | Implemented at starter depth |
-| Production capacity and inventory | Implemented at starter depth |
-| Labour and payroll | Implemented at starter depth |
-| Input procurement | Implemented with simplified outside suppliers |
-| Connected farm/manufacturer/retailer chain | Implemented at starter depth |
-| Pricing and demand response | Simplified model |
-| Company revenue, costs, profit and value | Implemented at starter depth |
-| Independent AI competitors | Not implemented |
-| Market share and rival strategy | Not implemented |
-| Complex supplier/transport/warehouse network | Not implemented |
-| Multiple input-output sectors / national supply chain | Not implemented |
-| Detailed company statements and corporate finance | Not implemented |
-| Fully dynamic macroeconomy | Not implemented |
+The model reserves 18% of aggregate deposits and retains a ₹15 lakh liquidity/operating buffer for related-party loans. Public lending uses a separate liquidity buffer and is capped to a small percentage of available cash. Outstanding owner loans are not subtracted again from available cash because those loan proceeds have already left the vault; this prevents double-counting the same liquidity use.
 
-## Next audit targets
+At quarter settlement, customer deposit growth, public-loan origination/interest/principal recovery, owner-loan instalments, deposit interest and branch operating costs are processed. Owner deposit interest is capitalised into the owner's deposit liability, not deducted a second time as a cash payment. Public-loan principal recoveries return to bank cash. Owner interest is recognised in bank revenue; actual cash is received when the instalment is paid.
 
-1. Repeat multi-year scenarios with different player strategies (low-price/high-volume, premium/high-quality, expansion, cash conservation).
-2. Add competitor firms and validate market-share conservation.
-3. Add supplier/transport/warehouse costs and compare internal versus external procurement.
-4. Reconcile full company balance sheets and cash-flow statements, not only quarter P&L.
-5. Run sensitivity analysis on wages, input prices, demand elasticity, inflation and interest rates.
+## Company economy
+
+The company engine has company-specific cash, working capital, staff/payroll, capacity, production, inventory, prices, quality, marketing, demand, sales, revenues, costs and quarterly profit/loss. A starter paddy farm → rice mill → grocery store chain can source from owned suppliers and simplified external suppliers.
+
+## Regression evidence
+
+`node tests/test_game.cjs` currently reports 46/46 pass. It includes owner-bank deposits, withdrawals, rate changes, owner loans, early repayment, branch capitalisation, a second owned bank and a 30-quarter multi-bank stress run. `node tests/check_pwa.cjs` verifies the manifest, icons, service-worker precache paths and navigation fallback.
+
+## Limitations and next steps
+
+The bank is still a simplified aggregate institution: no customer-by-customer credit files, default probabilities, collateral valuation, deposit insurance, central-bank funding, interbank markets, liquidity coverage ratio, capital adequacy ratio, AML/compliance, bank resolution or AI rival banks. Public customer growth and public lending are aggregated formulas. Related-party loans are intentionally modelled as a convenience feature for gameplay and would need governance/limits for a full simulation.
+
+The market has no real exchange, live market data, bonds, derivatives, short selling, order book, intraday trading, brokerage integration or tax treatment. The company economy still needs AI competitors, full supplier networks, freight/warehouses, varied intermediate inputs, detailed customer segments, company statements, tax and macroeconomic feedback.
+
+This model is suitable as a playable foundation for future systems, not as financial education, investment advice or a faithful regulatory simulation.

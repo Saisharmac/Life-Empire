@@ -1,9 +1,9 @@
 (() => {
   'use strict';
 
-  const BUILD = '0.2.0';
-  const SAVE_KEY = 'life-and-empire-save-v2';
-  const LEGACY_KEY = 'life-and-empire-save-v1';
+  const BUILD = '0.3.0';
+  const SAVE_KEY = 'life-and-empire-save-v3';
+  const LEGACY_KEY = 'life-and-empire-save-v2';
   const START_YEAR = 2026;
   const ACTIONS_PER_QUARTER = 3;
   const $ = (s, root = document) => root.querySelector(s);
@@ -12,6 +12,7 @@
   let activeTab = 'home';
   let deferredInstallPrompt = null;
   let toastTimer = null;
+  let marketSort = 'movers';
 
   const CURRENCIES = {
     INR: { name: 'Indian Rupee', symbol: '₹', rate: 1 },
@@ -89,7 +90,7 @@
   const accountTotal = () => (game.wallet.INR || 0) + (game.bank.current || 0) + (game.bank.savings || 0);
   const totalInvested = () => game.portfolio.fundValue + game.portfolio.goldValue + Object.entries(game.portfolio.stocks).reduce((s,[id,q]) => s + q * (stock(id)?.price || 0), 0) + game.bank.fixedDeposits.reduce((s,fd)=>s+fd.principal+(fd.accrued||0),0);
   const stock = id => game.market.stocks.find(s => s.id === id);
-  const netWorth = () => accountTotal() + totalInvested() + game.businesses.reduce((s,b)=>s+b.value,0) + game.properties.reduce((s,p)=>s+p.value,0) - game.bank.loans.reduce((s,l)=>s+l.balance,0);
+  const netWorth = () => accountTotal() + totalInvested() + game.businesses.reduce((s,b)=>s+b.value,0) + game.properties.reduce((s,p)=>s+p.value,0) + game.bank.ownedBanks.reduce((v,b)=>v+(b.playerDeposits||0)+Math.max(0,b.cash+(b.fixedAssets||0)+(b.publicLoanBook||0)+b.playerLoans.reduce((z,l)=>z+l.balance,0)-b.deposits),0) - game.bank.loans.reduce((s,l)=>s+l.balance,0) - game.bank.ownedBanks.reduce((v,b)=>v+b.playerLoans.reduce((z,l)=>z+l.balance,0),0);
   const toast = msg => { let el = $('.toast'); if (el) el.remove(); el = document.createElement('div'); el.className='toast'; el.textContent=msg; document.body.appendChild(el); clearTimeout(toastTimer); toastTimer=setTimeout(()=>el.remove(),2800); };
   const log = (text, type='life') => { game.journal.unshift({ year:game.time.year, quarter:game.time.quarter, text, type }); game.journal = game.journal.slice(0,120); };
   const save = () => { try { localStorage.setItem(SAVE_KEY, JSON.stringify(game)); return true; } catch(e) { console.error(e); toast('Save failed. Export your backup and check browser storage.'); return false; } };
@@ -99,12 +100,12 @@
     const b = BACKGROUNDS[bg];
     const initialCash = bg==='working'?900:bg==='middle'?1800:6000;
     game = {
-      version:2,
+      version:3,
       player:{ name:String(data.name).trim().slice(0,28), presentation:data.presentation||'neutral', appearance:data.appearance||'classic', trait:data.trait||'curious', city:data.city in CITIES?data.city:'Hyderabad', background:bg, age:0, health:86, energy:78, stress:12, happiness:78, smarts:52+(TRAITS[data.trait]?.study?2:0), fitness:35, creativity:48, discipline:45, charisma:42, confidence:42, social:48, resilience:50, alive:true, partner:null, maritalStatus:'Single', children:[] },
       time:{year:START_YEAR,quarter:1,actionPoints:ACTIONS_PER_QUARTER,actionsUsed:0},
       family:{funds:b.funds,quarterlyIncome:b.income,quarterlyExpense:b.expense,schoolFee:b.school,closeness:bg==='working'?60:bg==='middle'?68:74,parents:[{name:'Mother',role:'Mother',age:27+Math.floor(Math.random()*7),health:82},{name:'Father',role:'Father',age:29+Math.floor(Math.random()*8),health:80}],siblings:data.sibling==='yes'?[{name:'Younger sibling',age:-2,closeness:45}]:[],support:70,educationFund:b.funds*.08},
       wallet:{INR:initialCash,USD:0,AED:0,SGD:0,GBP:0,EUR:0},
-      bank:{current:0,savings:0,fixedDeposits:[],creditScore:650,loans:[],insurance:false,insuranceQuarters:0},
+      bank:{current:0,savings:0,fixedDeposits:[],creditScore:650,loans:[],insurance:false,insuranceQuarters:0,ownedBanks:[]},
       needs:{},
       school:{grade:0,attendance:0,effort:0,marks:50,schoolName:'Local Public School',enrolled:false,completed:false,graduation:null,stream:null},
       career:{education:0,educationProgress:0,college:null,collegeProgress:0,collegeEffort:0,collegeTarget:12,collegeLevel:2,job:null,experience:0,tenure:0,performance:50,skills:{tech:3,business:3,finance:2,communication:4,science:4,arts:4}},
@@ -112,6 +113,7 @@
       portfolio:{stocks:{},fundValue:0,fundUnits:0,goldValue:0,goldGrams:0},
       market:{index:1000,sentiment:0,inflation:5.2,repoRate:6.5,unemployment:7.4,priceIndex:1,fundNav:100,goldPrice:7200,stocks:SECURITIES.map(s=>({...s}))},
       businesses:[],properties:[],
+      economy:{quarter:{income:0,expenses:0,investments:0,debtService:0,financing:0,assetSales:0,support:0,marketChange:0},history:[]},
       household:{monthlySpending:0,insurance:false},
       journal:[{year:START_YEAR,quarter:1,text:`${data.name} was born in ${data.city}. A new life begins.`,type:'birth'}],
       stats:{totalEarned:0,totalSpent:0,actions:0,quarters:0,businessesFounded:0,careerYears:0,bestNetWorth:initialCash}
@@ -123,7 +125,7 @@
   }
 
   function validSave(s) {
-    if (!s || s.version!==2 || !s.player || !s.time || !s.bank || !s.market || !Array.isArray(s.journal)) return false;
+    if (!s || s.version!==3 || !s.player || !s.time || !s.bank || !s.market || !Array.isArray(s.journal)) return false;
     const p=s.player,t=s.time,b=s.bank,c=s.career,w=s.wallet,m=s.market,school=s.school,portfolio=s.portfolio;
     const finite=(v,min=-Infinity,max=Infinity)=>Number.isFinite(v)&&v>=min&&v<=max;
     if(typeof p.name!=='string'||!p.name.trim()||p.name.length>28||!(p.city in CITIES)||!(p.background in BACKGROUNDS)||!(p.trait in TRAITS)) return false;
@@ -133,7 +135,7 @@
     if(!['Single','Engaged','Married'].includes(p.maritalStatus)) return false;
     if(!Number.isInteger(t.year)||t.year<START_YEAR||!Number.isInteger(t.quarter)||t.quarter<1||t.quarter>4||!Number.isInteger(t.actionPoints)||t.actionPoints<0||t.actionPoints>3||!Number.isInteger(t.actionsUsed)||t.actionsUsed<0||t.actionsUsed>3) return false;
     if(!w||!['INR','USD','AED','SGD','GBP','EUR'].every(k=>finite(w[k],0))) return false;
-    if(!finite(b.current,0)||!finite(b.savings,0)||!finite(b.creditScore,300,900)||!Array.isArray(b.fixedDeposits)||!Array.isArray(b.loans)) return false;
+    if(!finite(b.current,0)||!finite(b.savings,0)||!finite(b.creditScore,300,900)||!Array.isArray(b.fixedDeposits)||!Array.isArray(b.loans)||!Array.isArray(b.ownedBanks)) return false;
     if(!b.fixedDeposits.every(fd=>typeof fd.id==='string'&&finite(fd.principal,0)&&finite(fd.rate,0,.2)&&Number.isInteger(fd.remaining)&&fd.remaining>=1&&fd.remaining<=12&&finite(fd.accrued||0,0))) return false;
     if(!b.loans.every(l=>typeof l.id==='string'&&finite(l.balance,0)&&finite(l.principal,0)&&finite(l.rate,0,.2)&&Number.isInteger(l.remaining)&&l.remaining>=0&&l.remaining<=100&&Number.isInteger(l.term)&&l.term>=1&&l.term<=100)) return false;
     if(!school||!Number.isInteger(school.grade)||school.grade<0||school.grade>12||!finite(school.attendance,0,1000)||!finite(school.effort,0,1000)||!finite(school.marks,0,100)) return false;
@@ -143,28 +145,68 @@
     if(!s.family||!Array.isArray(s.family.parents)||!Array.isArray(s.family.siblings)||!finite(s.family.funds,0)||!finite(s.family.educationFund,0)||!s.relationships||!['parents','friends','network','partner'].every(k=>finite(s.relationships[k],0,100))) return false;
     if(!Array.isArray(s.businesses)||s.businesses.length>5||s.businesses.some(x=>!BUSINESS_TYPES.some(t=>t.id===x.type)||typeof x.id!=='string'||!finite(x.cash,0)||!finite(x.price,1)||!finite(x.inventory,0)||!finite(x.employees,0,30)||!finite(x.capacity,1)||!finite(x.quality,0,100)||!Array.isArray(x.history))) return false;
     if(new Set(s.businesses.map(x=>x.type)).size!==s.businesses.length) return false;
+    if(!s.economy||!s.economy.quarter||!['income','expenses','investments','debtService','financing','assetSales','support','marketChange'].every(k=>Number.isFinite(s.economy.quarter[k]))||!Array.isArray(s.economy.history)) return false;
+    if(b.ownedBanks.length>3||!b.ownedBanks.every(x=>typeof x.id==='string'&&finite(x.cash,0)&&finite(x.fixedAssets||0,0)&&finite(x.capital,0)&&finite(x.deposits,0)&&finite(x.playerDeposits,0)&&finite(x.publicLoanBook||0,0)&&finite(x.loanRate,.008,.04)&&finite(x.depositRate,.005,.1)&&finite(x.branches,1,20)&&finite(x.trust,0,100)&&Array.isArray(x.playerLoans)&&x.playerLoans.every(l=>typeof l.id==='string'&&finite(l.balance,0)&&finite(l.principal,0)&&finite(l.rate,.008,.04)&&Number.isInteger(l.remaining)&&l.remaining>=0&&l.remaining<=100))) return false;
     if(!Array.isArray(s.properties)||s.properties.some(x=>!PROPERTIES.some(t=>t.id===x.type)||!finite(x.value,0)||!finite(x.rent,0)||!finite(x.maintenance,0))) return false;
     if(!s.stats||!finite(s.stats.totalEarned,0)||!finite(s.stats.totalSpent,0)||!finite(s.stats.quarters,0)) return false;
     return true;
   }
 
+  function migrateSave(s) {
+    if(!s || s.version!==2) return s;
+    s.version=3;
+    s.bank=s.bank||{}; s.bank.ownedBanks=s.bank.ownedBanks||[];
+    s.economy=s.economy||{quarter:{income:0,expenses:0,investments:0,debtService:0,financing:0,assetSales:0,support:0,marketChange:0},history:[]};
+    s.economy.quarter=s.economy.quarter||{income:0,expenses:0,investments:0,debtService:0,financing:0,assetSales:0,support:0,marketChange:0};
+    ['income','expenses','investments','debtService','financing','assetSales','support','marketChange'].forEach(k=>{if(!Number.isFinite(s.economy.quarter[k]))s.economy.quarter[k]=0;});
+    s.economy.history=s.economy.history||[];
+    return s;
+  }
   function loadGame() {
-    try { const raw=localStorage.getItem(SAVE_KEY); if(!raw) return false; const parsed=JSON.parse(raw); if(!validSave(parsed)) throw new Error('Save data failed validation.'); game=parsed; return true; }
-    catch(e) { console.warn('Save could not be loaded:',e); return false; }
+    try {
+      let raw=localStorage.getItem(SAVE_KEY);
+      if(!raw) raw=localStorage.getItem(LEGACY_KEY);
+      if(!raw) return false;
+      const parsed=migrateSave(JSON.parse(raw));
+      if(!validSave(parsed)) throw new Error('Save data failed validation.');
+      game=parsed; save(); return true;
+    } catch(e) { console.warn('Save could not be loaded:',e); return false; }
   }
   function oldSaveExists() { try { return !!localStorage.getItem(LEGACY_KEY); } catch(_) { return false; } }
-  function spend(amount) {
+  function spend(amount, classification='expense') {
     amount=Math.ceil(Number(amount)); if(!Number.isFinite(amount)||amount<0||accountTotal()<amount) return false;
     let left=amount;
     const fromWallet=Math.min(game.wallet.INR,left); game.wallet.INR-=fromWallet; left-=fromWallet;
     const fromCurrent=Math.min(game.bank.current,left); game.bank.current-=fromCurrent; left-=fromCurrent;
     const fromSavings=Math.min(game.bank.savings,left); game.bank.savings-=fromSavings; left-=fromSavings;
-    game.stats.totalSpent+=amount; return true;
+    game.stats.totalSpent+=amount;
+    if(game.economy&&game.economy.quarter) {
+      if(classification==='investment') game.economy.quarter.investments+=amount;
+      else if(classification==='debt') game.economy.quarter.debtService+=amount;
+      else game.economy.quarter.expenses+=amount;
+    }
+    return true;
   }
-  function credit(amount, account='current') {
+  function credit(amount, account='current', classification='income') {
     amount=Math.round(Number(amount)); if(!Number.isFinite(amount)||amount<=0) return;
     if(account==='wallet') game.wallet.INR+=amount; else if(account==='savings') game.bank.savings+=amount; else game.bank.current+=amount;
     game.stats.totalEarned+=amount;
+    if(game.economy&&game.economy.quarter) {
+      if(classification==='financing') game.economy.quarter.financing+=amount;
+      else if(classification==='assetSale') game.economy.quarter.assetSales+=amount;
+      else if(classification==='support') game.economy.quarter.support+=amount;
+      else game.economy.quarter.income+=amount;
+    }
+  }
+  function transferOut(amount) {
+    amount=Math.ceil(Number(amount)); if(!Number.isFinite(amount)||amount<=0||accountTotal()<amount) return false;
+    let left=amount; const w=Math.min(game.wallet.INR,left);game.wallet.INR-=w;left-=w;
+    const c=Math.min(game.bank.current,left);game.bank.current-=c;left-=c;
+    const sv=Math.min(game.bank.savings,left);game.bank.savings-=sv;left-=sv;
+    return true;
+  }
+  function quarterMarketValue() {
+    return totalInvested() + game.businesses.reduce((v,b)=>v+(Number(b.value)||0),0) + game.properties.reduce((v,p)=>v+(Number(p.value)||0),0);
   }
   function consumeAction(cost=1, energy=0, stress=0) {
     if(game.time.actionPoints<cost) { toast('No decision slots left this quarter. End the quarter to continue.'); return false; }
@@ -281,6 +323,58 @@
   function randomName() { return ['Aarav','Ananya','Ishaan','Meera','Kabir','Aadhya','Vihaan','Diya','Arjun','Saanvi'][Math.floor(Math.random()*10)]; }
   function skillName(key) { return ({tech:'technology',business:'business',finance:'finance',communication:'communication',science:'science',arts:'arts'})[key]||key; }
 
+  function ownBankAvailableLoan(bank) {
+    const reserve=Math.max(0,bank.deposits*0.18);
+    // Outstanding owner loans have already left the cash vault; subtracting them again would double-count the liquidity use.
+    return Math.max(0,Math.floor(bank.cash-reserve-1500000));
+  }
+  function ownBankAction(action, amount, extra={}) {
+    const bank=game.bank.ownedBanks.find(x=>x.id===(extra.bankId||game.bank.ownedBanks[0]?.id));
+    if(!bank) return toast('You do not own a bank yet. Establish one first.');
+    amount=Math.round(Number(amount));
+    if(!Number.isFinite(amount)||(amount<=0&&!['rate','deposit-rate'].includes(action))) return toast('Enter a valid amount.');
+    if(action==='deposit') {
+      if(accountTotal()<amount) return toast('Insufficient personal cash to deposit.');
+      if(!consumeAction(1,1,1)) return;
+      if(!transferOut(amount)) return toast('Insufficient personal cash to deposit.');
+      bank.cash+=amount;bank.deposits+=amount;bank.playerDeposits+=amount;
+      log(`Deposited ${fmt(amount)} into ${bank.name}. Your deposit is a bank liability and personal asset.`, 'bank');
+    } else if(action==='withdraw') {
+      if(amount>bank.playerDeposits||amount>bank.cash) return toast('The bank does not have enough withdrawable liquidity.');
+      if(!consumeAction(1,1,1)) return;
+      bank.cash-=amount;bank.deposits-=amount;bank.playerDeposits-=amount;game.bank.current+=amount;
+      log(`Withdrew ${fmt(amount)} from ${bank.name}.`, 'bank');
+    } else if(action==='loan') {
+      if(!canAdult()) return toast('Bank loans unlock at age 18.');
+      const limit=ownBankAvailableLoan(bank);
+      if(amount>limit) return toast(`Your bank can lend up to ${fmt(limit)} now, after its liquidity reserve.`);
+      const term=Number(extra.term||8);if(![4,8,12,16].includes(term))return toast('Choose a valid loan term.');
+      if(!consumeAction(1,2,2))return;
+      bank.cash-=amount;
+      const loan={id:`obloan-${Date.now()}-${Math.random().toString(36).slice(2,5)}`,principal:amount,balance:amount,rate:bank.loanRate,term,remaining:term,createdAt:game.time.year*4+game.time.quarter};
+      bank.playerLoans.push(loan);credit(amount,'current','financing');
+      log(`You borrowed ${fmt(amount)} from your own ${bank.name} at ${(loan.rate*100).toFixed(2)}% per quarter. The loan is recorded as a personal liability and a bank asset.`, 'bank');
+    } else if(action==='repay') {
+      const loan=bank.playerLoans.find(x=>x.id===extra.loanId);if(!loan)return toast('Owned-bank loan not found.');
+      amount=Math.min(amount,loan.balance);if(amount<1||accountTotal()<amount)return toast('Insufficient personal funds for repayment.');
+      if(!consumeAction(1,1,1))return;
+      spend(amount,'debt');bank.cash+=amount;loan.balance=Math.max(0,loan.balance-amount);
+      if(loan.balance<1)bank.playerLoans=bank.playerLoans.filter(x=>x.id!==loan.id);
+      log(`Repaid ${fmt(amount)} to ${bank.name}. The payment reduces personal debt and returns cash to your bank.`, 'bank');
+    } else if(action==='rate') {
+      const rate=Number(extra.rate);if(!Number.isFinite(rate)||rate<.008||rate>.04)return toast('Set a quarterly loan rate between 0.8% and 4%.');
+      if(!consumeAction(1,1,1))return;bank.loanRate=rate;
+      log(`Changed ${bank.name}'s quarterly lending rate to ${(rate*100).toFixed(2)}%.`, 'bank');
+    } else if(action==='deposit-rate') {
+      const rate=Number(extra.rate);if(!Number.isFinite(rate)||rate<.005||rate>.10)return toast('Set an annual deposit rate between 0.5% and 10%.');
+      if(!consumeAction(1,1,1))return;bank.depositRate=rate;
+      log(`Changed ${bank.name}'s annual deposit rate to ${(rate*100).toFixed(2)}%.`, 'bank');
+    } else if(action==='branch') {
+      const cost=1250000;if(bank.branches>=20)return toast('This bank has reached the branch limit.');if(bank.cash<cost)return toast(`The bank needs ${fmt(cost)} available vault cash.`);if(!consumeAction(1,3,2))return;bank.cash-=cost;bank.fixedAssets=(bank.fixedAssets||0)+cost;bank.branches++;bank.trust=clamp(bank.trust+2);log(`${bank.name} opened branch ${bank.branches} in ${bank.city}. Customer reach increased, with higher operating costs.`, 'bank');
+    }
+    save();render();toast('Owned-bank transaction completed.');
+  }
+
   function bankAction(action, amount, extra={}) {
     amount=Math.round(Number(amount));
     if(!Number.isFinite(amount)||amount<=0) return toast('Enter a valid amount greater than zero.');
@@ -299,7 +393,7 @@
       if(accountTotal()<amount) return toast('Insufficient funds to open this deposit.');
       if(!consumeAction(1,2,1)) return;
       const rate=term===4?.062:term===8?.068:.058;
-      spend(amount);
+      spend(amount,'investment');
       game.bank.fixedDeposits.push({id:`fd-${Date.now()}-${Math.random().toString(36).slice(2,5)}`,principal:amount,rate,term,remaining:term,accrued:0,opened:`${game.time.year}-Q${game.time.quarter}`});
       log(`Opened a ${term}-quarter fixed deposit for ${fmt(amount)} at ${(rate*100).toFixed(1)}% annual interest.`, 'bank');
     } else if(action==='loan') {
@@ -308,12 +402,12 @@
       const term=Number(extra.term||8); if(![4,8,12].includes(term)) return toast('Choose a valid loan term.');
       if(!consumeAction(1,2,2)) return;
       game.bank.loans.push({id:`loan-${Date.now()}-${Math.random().toString(36).slice(2,5)}`,principal:amount,balance:amount,rate:.024,remaining:term,term,createdAt:game.time.year*4+game.time.quarter});
-      game.bank.creditScore=clamp(game.bank.creditScore-4,300,900); credit(amount,'current'); log(`You took a ${fmt(amount)} personal loan at 2.4% quarterly interest over ${term} quarters. Scheduled repayments begin at quarter settlement.`, 'bank');
+      game.bank.creditScore=clamp(game.bank.creditScore-4,300,900); credit(amount,'current','financing'); log(`You took a ${fmt(amount)} personal loan at 2.4% quarterly interest over ${term} quarters. Scheduled repayments begin at quarter settlement.`, 'bank');
     } else if(action==='repay-loan') {
       const loan=game.bank.loans.find(l=>l.id===extra.id); if(!loan) return toast('Loan not found.');
       amount=Math.min(amount,loan.balance); if(amount<=0||accountTotal()<amount) return toast('Insufficient funds for repayment.');
       if(!consumeAction(1,2,1)) return;
-      spend(amount); loan.balance=Math.max(0,loan.balance-amount);
+      spend(amount,'debt'); loan.balance=Math.max(0,loan.balance-amount);
       if(loan.balance<1) game.bank.loans=game.bank.loans.filter(l=>l.id!==loan.id);
       game.bank.creditScore=clamp(game.bank.creditScore+3,300,900); log(`You made an extra repayment of ${fmt(amount)} on a bank loan.`, 'bank');
     } else return toast('Unknown banking operation.');
@@ -340,18 +434,18 @@
     } else return toast('Unknown market order.');
     if(!consumeAction(1,2,1)) return;
     if(action==='buy-stock') {
-      spend(cost); game.portfolio.stocks[id]=(game.portfolio.stocks[id]||0)+qty; log(`Bought ${qty} shares of ${security.name} for ${fmt(cost)}.`, 'market');
+      spend(cost,'investment'); game.portfolio.stocks[id]=(game.portfolio.stocks[id]||0)+qty; log(`Bought ${qty} shares of ${security.name} for ${fmt(cost)}.`, 'market');
     } else if(action==='sell-stock') {
       game.portfolio.stocks[id]-=qty; if(!game.portfolio.stocks[id]) delete game.portfolio.stocks[id];
-      const proceeds=Math.floor(qty*security.price*.9985); credit(proceeds,'current'); log(`Sold ${qty} shares of ${security.name} for ${fmt(proceeds)} net of brokerage.`, 'market');
+      const proceeds=Math.floor(qty*security.price*.9985); credit(proceeds,'current','assetSale'); log(`Sold ${qty} shares of ${security.name} for ${fmt(proceeds)} net of brokerage.`, 'market');
     } else if(action==='fund-buy') {
-      spend(amount); game.portfolio.fundUnits+=amount/game.market.fundNav; game.portfolio.fundValue=game.portfolio.fundUnits*game.market.fundNav; log(`Invested ${fmt(amount)} in the diversified India Equity Fund.`, 'market');
+      spend(amount,'investment'); game.portfolio.fundUnits+=amount/game.market.fundNav; game.portfolio.fundValue=game.portfolio.fundUnits*game.market.fundNav; log(`Invested ${fmt(amount)} in the diversified India Equity Fund.`, 'market');
     } else if(action==='fund-sell') {
-      const proceeds=units*game.market.fundNav*.998; game.portfolio.fundUnits-=units; game.portfolio.fundValue=game.portfolio.fundUnits*game.market.fundNav; credit(proceeds,'current'); log(`Redeemed mutual fund units for ${fmt(proceeds)} net of exit cost.`, 'market');
+      const proceeds=units*game.market.fundNav*.998; game.portfolio.fundUnits-=units; game.portfolio.fundValue=game.portfolio.fundUnits*game.market.fundNav; credit(proceeds,'current','assetSale'); log(`Redeemed mutual fund units for ${fmt(proceeds)} net of exit cost.`, 'market');
     } else if(action==='gold-buy') {
-      spend(amount); grams=amount/game.market.goldPrice; game.portfolio.goldGrams+=grams; game.portfolio.goldValue=game.portfolio.goldGrams*game.market.goldPrice; log(`Bought ${num(grams,2)} grams of simulated digital gold.`, 'market');
+      spend(amount,'investment'); grams=amount/game.market.goldPrice; game.portfolio.goldGrams+=grams; game.portfolio.goldValue=game.portfolio.goldGrams*game.market.goldPrice; log(`Bought ${num(grams,2)} grams of simulated digital gold.`, 'market');
     } else if(action==='gold-sell') {
-      const proceeds=grams*game.market.goldPrice*.997; game.portfolio.goldGrams-=grams; game.portfolio.goldValue=game.portfolio.goldGrams*game.market.goldPrice; credit(proceeds,'current'); log(`Sold gold for ${fmt(proceeds)} net of spread.`, 'market');
+      const proceeds=grams*game.market.goldPrice*.997; game.portfolio.goldGrams-=grams; game.portfolio.goldValue=game.portfolio.goldGrams*game.market.goldPrice; credit(proceeds,'current','assetSale'); log(`Sold gold for ${fmt(proceeds)} net of spread.`, 'market');
     }
     save(); render(); toast('Market order completed. One quarterly decision was used.');
   }
@@ -380,7 +474,7 @@
       const fee=Number(data.fee||(postgrad?35000:18000));
       if(!Number.isFinite(fee)||fee<=0||accountTotal()<fee) return toast(`You need ${fmt(fee)} for the first college instalment.`);
       if(!consumeAction(1,10,postgrad?4:3)) return;
-      spend(fee); game.career.college=data.course||(postgrad?'Postgraduate Diploma':'Bachelor of Commerce'); game.career.collegeProgress=0; game.career.collegeEffort=0; game.career.collegeTarget=postgrad?8:12; game.career.collegeLevel=postgrad?3:2;
+      spend(fee,'expense'); game.career.college=data.course||(postgrad?'Postgraduate Diploma':'Bachelor of Commerce'); game.career.collegeProgress=0; game.career.collegeEffort=0; game.career.collegeTarget=postgrad?8:12; game.career.collegeLevel=postgrad?3:2;
       log(`You enrolled in ${game.career.college}. Tuition and study workload now apply.`, 'education');
     } else if(action==='finish-college') {
       const target=game.career.collegeTarget||12;
@@ -402,14 +496,14 @@
     const totalRequired=spec.setup+spec.capital;
     if(accountTotal()<totalRequired) return toast(`You need ${fmt(totalRequired)} for setup and initial working capital.`);
     if(!consumeAction(1,6,2)) return;
-    spend(totalRequired);
+    spend(totalRequired,'investment');
     const b={id:`co-${Date.now()}-${Math.random().toString(36).slice(2,6)}`,type:id,name:spec.name,city:game.player.city,level:1,employees:2,cash:spec.capital,inventory:0,price:spec.basePrice,capacity:spec.capacity,quality:50,brand:10,revenue:0,costs:0,profit:0,lastUnits:0,value:spec.setup*.75,history:[]};
     game.businesses.push(b); game.stats.businessesFounded++; log(`You founded ${spec.name} in ${game.player.city}. Setup cost ${fmt(spec.setup)} and initial working capital ${fmt(spec.capital)} were funded.`, 'business'); save(); render();
   }
   function manageBusiness(action,data={}) {
     const b=game.businesses.find(x=>x.id===data.id); if(!b) return toast('Company not found.');
     const spec=BUSINESS_TYPES.find(x=>x.id===b.type);
-    if(action==='inject') { const amount=Number(data.amount); if(!Number.isFinite(amount)||amount<1000||accountTotal()<amount) return toast('Enter a valid amount and ensure personal funds are available.'); if(!consumeAction(1,2,1))return; spend(amount); b.cash+=amount; log(`You injected ${fmt(amount)} into ${b.name} as working capital.`, 'business'); }
+    if(action==='inject') { const amount=Number(data.amount); if(!Number.isFinite(amount)||amount<1000||accountTotal()<amount) return toast('Enter a valid amount and ensure personal funds are available.'); if(!consumeAction(1,2,1))return; spend(amount,'investment'); b.cash+=amount; log(`You injected ${fmt(amount)} into ${b.name} as working capital.`, 'business'); }
     if(action==='price') { const price=Number(data.price); if(!Number.isFinite(price)||price<1||price>1000000) return toast('Enter a valid selling price.'); if(!consumeAction(1,2,1))return; b.price=price; log(`You changed ${b.name}'s selling price to ${fmt(price)}.`, 'business'); }
     if(action==='hire') { if(b.employees>=30) return toast('Employee limit reached for this company.'); if(!consumeAction(1,3,1))return; b.employees++; log(`You hired an employee at ${b.name}. Payroll obligations increased.`, 'business'); }
     if(action==='fire') { if(b.employees<=0) return toast('The company has no employees to remove.'); if(!consumeAction(1,2,1))return; b.employees--; log(`You reduced staffing at ${b.name}.`, 'business'); }
@@ -424,7 +518,7 @@
     if(!canAdult()) return toast('Property investment is available from age 18.');
     if(accountTotal()<spec.price) return toast(`You need ${fmt(spec.price)} to buy this property outright.`);
     if(!consumeAction(1,5,2)) return;
-    spend(spec.price);
+    spend(spec.price,'investment');
     game.properties.push({id:`prop-${Date.now()}`,type:id,name:spec.name,value:spec.price,rent:spec.rent,maintenance:spec.maintenance,city:game.player.city});
     log(`You purchased ${spec.name} in ${game.player.city} for ${fmt(spec.price)}.`, 'property'); save(); render();
   }
@@ -444,7 +538,7 @@
     if(game.player.children.length>=4) return toast('Your household has reached the four-child limit.');
     if(accountTotal()<35000) return toast('Your household needs ₹35,000 available for childbirth and early care costs.');
     if(!consumeAction(1,8,4)) return;
-    spend(35000);
+    spend(35000,'expense');
     const name=randomName(); game.player.children.push({name,age:0,health:85}); log(`${name} joined your family. You are now responsible for a new generation.`, 'family'); game.player.happiness=clamp(game.player.happiness+6); save(); render();
   }
 
@@ -461,7 +555,7 @@
     if(!canAdult()) return toast('You can relocate independently from age 18.');
     if(accountTotal()<18000) return toast('You need ₹18,000 for relocation and setup costs.');
     if(!consumeAction(1,8,3)) return;
-    spend(18000);
+    spend(18000,'expense');
     const old=game.player.city; game.player.city=name; log(`You relocated from ${old} to ${name}. Personal living costs changed; existing companies remain in their registered cities.`, 'world'); save(); render();
   }
 
@@ -528,6 +622,7 @@
 
   function settleQuarter() {
     const p=game.player, b=background();
+    const marketValueAtOpen=totalInvested();
     // Family household funds carry childhood costs; after adulthood the player carries their own budget.
     if(p.age<18) {
       game.family.funds+=game.family.quarterlyIncome;
@@ -535,7 +630,7 @@
       const householdCost=Math.round(game.family.quarterlyExpense*city().cost*(game.market.priceIndex||1));
       game.family.educationFund=Math.max(0,game.family.educationFund-fee);
       game.family.funds-=householdCost+fee;
-      credit(b.pocket,'wallet');
+      credit(b.pocket,'wallet','support');
       if(game.family.funds<0) { game.family.funds=0; game.family.support=clamp(game.family.support-4); p.stress=clamp(p.stress+3); log('Your household is under financial pressure. School resources and family support may be affected.', 'event'); }
     } else {
       if(game.career.job) { const salary=game.career.job.salary/4; credit(salary,'current'); game.career.performance=clamp(game.career.performance+1); game.career.tenure++; }
@@ -546,12 +641,43 @@
       if(accountTotal()>=living) spend(living); else { const shortfall=living-accountTotal(); const available=accountTotal(); spend(available); game.bank.loans.push({id:`emergency-${Date.now()}`,principal:shortfall,balance:shortfall,rate:.03,remaining:4,term:4,emergency:true,createdAt:game.time.year*4+game.time.quarter}); log(`Your income could not cover living expenses. An emergency loan of ${fmt(shortfall)} was added.`, 'finance'); }
     }
     settleBusiness();
+    // Owned-bank operations: customer growth, loan interest, deposit interest and running costs.
+    game.bank.ownedBanks.forEach(ob=>{
+      const depositGrowth=Math.round(Math.min(180000*ob.branches,Math.max(0,(ob.trust*1800-ob.publicLoanBook*.002)*ob.branches)));
+      ob.publicDeposits=(ob.publicDeposits||0)+depositGrowth;ob.deposits+=depositGrowth;ob.cash+=depositGrowth;
+      const publicNewLoan=Math.min(Math.round(ob.cash*.035),Math.max(0,ob.cash-ob.deposits*.18-1800000));
+      if(publicNewLoan>0){ob.cash-=publicNewLoan;ob.publicLoanBook=(ob.publicLoanBook||0)+publicNewLoan;}
+      const publicInterest=Math.round((ob.publicLoanBook||0)*.023);
+      const publicPrincipalRecovery=Math.round((ob.publicLoanBook||0)*.055);
+      ob.publicLoanBook=Math.max(0,(ob.publicLoanBook||0)-publicPrincipalRecovery);
+      let ownerInterest=0;
+      ob.playerLoans.forEach(l=>{
+        const interest=Math.round(l.balance*l.rate);ownerInterest+=interest;
+        const scheduledPrincipal=Math.min(l.balance,Math.ceil((l.principal||l.balance)/Math.max(1,l.remaining||1)));
+        const due=interest+scheduledPrincipal;
+        if(accountTotal()>=due){spend(due,'debt');ob.cash+=due;l.balance=Math.max(0,l.balance-scheduledPrincipal);l.remaining=Math.max(0,l.remaining-1);}
+        else {l.balance+=interest;l.remaining=Math.max(1,l.remaining-1);l.missed=(l.missed||0)+1;ob.trust=clamp(ob.trust-2);log(`A repayment to ${ob.name} was missed. Interest was added to your loan balance.`, 'bank');}
+      });
+      ob.playerLoans=ob.playerLoans.filter(l=>l.balance>1);
+      const depositCost=Math.round(ob.deposits*ob.depositRate/4);
+      const playerDepositInterest=Math.round(ob.playerDeposits*ob.depositRate/4);
+      ob.playerDeposits+=playerDepositInterest;ob.deposits+=playerDepositInterest;
+      const cashDepositInterest=Math.max(0,depositCost-playerDepositInterest);
+      const operatingCost=52000*ob.branches;
+      const income=publicInterest+ownerInterest;
+      const profit=income-depositCost-operatingCost;
+      // Principal repayments return cash; public loan interest is collected in cash. Owner-loan interest is cash only when included in a paid instalment above. Owner deposit interest is capitalised into the owner's deposit liability rather than paid twice.
+      ob.cash=Math.max(0,ob.cash+publicPrincipalRecovery+publicInterest-cashDepositInterest-operatingCost);
+      ob.revenue=income;ob.costs=depositCost+operatingCost;ob.profit=profit;
+      if(profit>=0)ob.trust=clamp(ob.trust+0.5);else ob.trust=clamp(ob.trust-1);
+      ob.quarterHistory.unshift({year:game.time.year,quarter:game.time.quarter,revenue:income,costs:depositCost+operatingCost,profit});ob.quarterHistory=ob.quarterHistory.slice(0,8);
+    });
     // Deposits and credit have transparent quarterly accrual.
-    game.bank.savings=Math.round(game.bank.savings*(1+.035/4));
+    const savingsInterest=Math.round(game.bank.savings*.035/4);game.bank.savings+=savingsInterest;if(savingsInterest>0){game.stats.totalEarned+=savingsInterest;game.economy.quarter.income+=savingsInterest;}
     if(game.bank.insurance&&game.bank.insuranceQuarters>0){game.bank.insuranceQuarters--;if(game.bank.insuranceQuarters===0){game.bank.insurance=false;log('Your simulated health cover policy expired.','bank');}}
     game.bank.fixedDeposits.forEach(fd=>{fd.remaining--;fd.accrued=(fd.accrued||0)+fd.principal*fd.rate/4;});
     const matured=game.bank.fixedDeposits.filter(fd=>fd.remaining<=0);
-    matured.forEach(fd=>{const maturity=fd.principal+(fd.accrued||0);game.bank.savings+=maturity;game.stats.totalEarned+=Math.round(fd.accrued||0);log(`A fixed deposit matured. ${fmt(maturity)} was returned to savings, including ${fmt(fd.accrued||0)} interest.`, 'bank');});
+    matured.forEach(fd=>{const maturity=fd.principal+(fd.accrued||0);game.bank.savings+=maturity;game.stats.totalEarned+=Math.round(fd.accrued||0);game.economy.quarter.income+=Math.round(fd.accrued||0);log(`A fixed deposit matured. ${fmt(maturity)} was returned to savings, including ${fmt(fd.accrued||0)} interest.`, 'bank');});
     game.bank.fixedDeposits=game.bank.fixedDeposits.filter(fd=>fd.remaining>0);
     game.bank.loans.forEach(l=>{
       const currentPeriod=game.time.year*4+game.time.quarter;
@@ -559,7 +685,7 @@
       const interest=Math.round(l.balance*l.rate);
       const scheduledPrincipal=Math.min(l.balance,l.remaining<=1?l.balance:Math.ceil((l.principal||l.balance)/Math.max(1,l.term||l.remaining)));
       const due=interest+scheduledPrincipal;
-      const paid=Math.min(due,accountTotal()); if(paid>0) spend(paid);
+      const paid=Math.min(due,accountTotal()); if(paid>0) spend(paid,'debt');
       const interestPaid=Math.min(interest,paid);
       const principalPaid=Math.min(scheduledPrincipal,Math.max(0,paid-interestPaid));
       l.balance=Math.max(0,Math.round(l.balance-principalPaid+(interest-interestPaid)));
@@ -580,6 +706,7 @@
     game.portfolio.fundValue=game.portfolio.fundUnits*game.market.fundNav;
     game.market.goldPrice=Math.max(4000,(game.market.goldPrice||7200)*(1+(Math.random()-.48)*.035+(game.market.inflation-5.2)/1000));
     game.portfolio.goldValue=game.portfolio.goldGrams*game.market.goldPrice;
+    game.economy.quarter.marketChange += Math.round(totalInvested()-marketValueAtOpen);
     // Needs and wellbeing recover at the change of quarter, but workload leaves a mark.
     const exhaustedAtSettlement=p.energy<12;
     const stressRecovery=trait().recovery||trait().resilience||1;
@@ -591,6 +718,14 @@
     }
     if(p.health<25) {p.energy=clamp(p.energy-4);p.happiness=clamp(p.happiness-3);}
     if(p.age>=18&&p.partner&&p.partner.affection>45&&Math.random()<.06){p.partner.trust=clamp(p.partner.trust+1);}
+    const q=game.economy.quarter;
+    const ownedBankProfit=game.bank.ownedBanks.reduce((v,x)=>v+(x.profit||0),0);
+    const businessRevenue=game.businesses.reduce((v,x)=>v+(x.revenue||0),0);
+    const businessCosts=game.businesses.reduce((v,x)=>v+(x.costs||0),0);
+    const businessProfit=game.businesses.reduce((v,x)=>v+(x.profit||0),0);
+    game.economy.history.unshift({year:game.time.year,quarter:game.time.quarter,income:q.income,expenses:q.expenses,investments:q.investments,debtService:q.debtService,financing:q.financing,assetSales:q.assetSales,support:q.support,marketChange:q.marketChange,businessRevenue,businessCosts,businessProfit,bankProfit:ownedBankProfit,net:q.income+q.support+q.assetSales+q.financing-q.expenses-q.investments-q.debtService+q.marketChange});
+    game.economy.history=game.economy.history.slice(0,12);
+    game.economy.quarter={income:0,expenses:0,investments:0,debtService:0,financing:0,assetSales:0,support:0,marketChange:0};
     game.stats.quarters++;
     game.time.quarter++;
     if(game.time.quarter>4) { game.time.quarter=1; game.time.year++; p.age++; annualLifeEvents(); }
@@ -636,6 +771,23 @@
     const wrap=document.createElement('div');wrap.className='modal-backdrop';wrap.innerHTML=`<section class="modal" role="dialog" aria-modal="true"><div class="modal-head"><h3>${esc(title)}</h3><button class="icon-button" data-action="close-modal" aria-label="Close">×</button></div>${body}</section>`;app.appendChild(wrap);
   }
   function formModal(title, body) { showModal(title,body); }
+  function establishBankModal() {
+    const cost=8500000, bankNumber=game.bank.ownedBanks.length+1;
+    formModal('Establish your own bank',`<div class="notice">A bank is a regulated financial business in this simulation. Initial paid-up capital: ${fmt(5000000)}. Licence, systems and launch costs: ${fmt(3500000)}. Total funding: ${fmt(cost)}. You can own up to three separate banks.</div><form id="establish-bank-form"><label>Bank name<input name="name" maxlength="28" required value="${esc((game.player.name.split(' ')[0]||'Dominion')+' Bank '+bankNumber)}"></label><label>Head office<select name="city">${Object.keys(CITIES).map(c=>`<option ${c===game.player.city?'selected':''}>${c}</option>`).join('')}</select></label><button class="button primary" ${!canAdult()||accountTotal()<cost||game.bank.ownedBanks.length>=3?'disabled':''}>Launch bank ${bankNumber}/3 · ${fmt(cost)}</button></form><p class="muted small">Each bank has its own capital, branches, deposits, loan book, interest income, liquidity and quarterly operating profit/loss. Loans to yourself appear as bank assets and personal liabilities.</p>`);
+  }
+  function ownBankBranchModal(bankId) {
+    const b=game.bank.ownedBanks.find(x=>x.id===bankId); if(!b)return; const cost=1250000;
+    formModal(`${esc(b.name)} · Open a branch`,`<div class="notice">A new branch expands customer reach and deposit potential, but adds quarterly operating costs. Existing bank vault cash funds the expansion.</div><form id="own-bank-branch-form"><input type="hidden" name="bankId" value="${b.id}"><div class="metric-grid">${stat('Current branches',b.branches)}${stat('Vault cash',fmt(b.cash))}${stat('Expansion cost',fmt(cost))}${stat('Next quarterly running cost',fmt(52000*(b.branches+1)))}</div><button class="button primary" ${b.cash<cost||b.branches>=20?'disabled':''}>Open branch</button></form>`);
+  }
+  function ownedBankModal(bankId) {
+    const b=game.bank.ownedBanks.find(x=>x.id===bankId);if(!b)return;
+    const limit=ownBankAvailableLoan(b);
+    formModal(`${esc(b.name)} · Bank operations`,`<div class="metric-grid">${stat('Vault cash',fmt(b.cash),'Available liquidity')}${stat('Deposits',fmt(b.deposits),'Customer liabilities')}${stat('Public loan book',fmt(b.publicLoanBook||0),'Loans to other customers')}${stat('Quarter profit',fmt(b.profit||0),'Latest result')}${stat('Branches',b.branches,'Retail footprint')}${stat('Branch assets',fmt(b.fixedAssets||0),'Capitalised network investment')}</div><div class="notice">Loan rate ${(b.loanRate*100).toFixed(2)}% per quarter · Savings rate ${(b.depositRate*100).toFixed(2)}% annual · Reserve ratio 18% · Available related-party lending ${fmt(limit)}.</div><div class="form-grid"><form id="own-bank-deposit-form"><input type="hidden" name="bankId" value="${b.id}"><label>Deposit into your bank<input name="amount" type="number" min="1" required placeholder="100000"></label><button class="button primary">Deposit</button></form><form id="own-bank-withdraw-form"><input type="hidden" name="bankId" value="${b.id}"><label>Withdraw your deposit<input name="amount" type="number" min="1" max="${Math.floor(b.playerDeposits)}" required placeholder="25000"></label><button class="button secondary">Withdraw</button><small>Your deposits ${fmt(b.playerDeposits)}</small></form><form id="own-bank-loan-form"><input type="hidden" name="bankId" value="${b.id}"><label>Borrow from your own bank<input name="amount" type="number" min="1000" max="${limit}" required placeholder="500000"></label><label>Term<select name="term"><option value="4">1 year</option><option value="8" selected>2 years</option><option value="12">3 years</option><option value="16">4 years</option></select></label><button class="button primary" ${!canAdult()||limit<1000?'disabled':''}>Take bank loan</button></form><form id="own-bank-rate-form"><input type="hidden" name="bankId" value="${b.id}"><label>Quarterly lending rate (%)<input name="rate" type="number" min="0.8" max="4" step="0.1" value="${(b.loanRate*100).toFixed(2)}"></label><button class="button ghost">Update loan rate</button></form><form id="own-bank-deposit-rate-form"><input type="hidden" name="bankId" value="${b.id}"><label>Annual deposit rate (%)<input name="rate" type="number" min="0.5" max="10" step="0.1" value="${(b.depositRate*100).toFixed(2)}"></label><button class="button ghost">Update savings rate</button></form></div>${b.playerLoans.length?`<h4 class="subheading">Your loans from your bank</h4>${b.playerLoans.map(l=>`<div class="loan-row"><div><b>${fmt(l.balance)} outstanding</b><small>${(l.rate*100).toFixed(2)}% quarterly · ${l.remaining} quarters left</small></div><button class="button mini secondary" data-action="repay-own-bank" data-id="${l.id}" data-bank-id="${b.id}">Repay</button></div>`).join('')}`:'<p class="muted small">No owner loans are outstanding.</p>'}<div class="button-row"><button class="button secondary" data-action="expand-bank" data-id="${b.id}" ${b.branches>=20?'disabled':''}>＋ Open branch · ₹12.5 lakh</button></div>`);
+  }
+  function ownBankRepayModal(bankId,loanId) {
+    const b=game.bank.ownedBanks.find(x=>x.id===bankId),l=b?.playerLoans.find(x=>x.id===loanId);if(!l)return;
+    formModal('Repay your bank loan',`<form id="own-bank-repay-form"><input type="hidden" name="bankId" value="${b.id}"><input type="hidden" name="loanId" value="${l.id}"><label>Amount<input name="amount" type="number" min="1" max="${Math.floor(l.balance)}" required value="${Math.floor(l.balance)}"></label><p class="muted">Outstanding ${fmt(l.balance)} · This payment reduces your personal debt and increases your bank's cash.</p><button class="button primary">Repay loan</button></form>`);
+  }
   function bankModal() {
     formModal('Banking operations',`<div class="form-grid"><form id="bank-deposit-form"><h4>Deposit into savings</h4><label>Amount (INR)<input name="amount" type="number" min="1" required placeholder="10000"></label><button class="button primary">Deposit funds</button></form><form id="bank-withdraw-form"><h4>Withdraw savings</h4><label>Amount (INR)<input name="amount" type="number" min="1" max="${Math.floor(game.bank.savings)}" required placeholder="5000"></label><button class="button secondary">Move to current</button></form><form id="bank-fd-form"><h4>Open fixed deposit</h4><label>Principal (INR)<input name="amount" type="number" min="1000" required placeholder="25000"></label><label>Term<select name="term"><option value="4">1 year · 6.2%</option><option value="8">2 years · 6.8%</option><option value="12">3 years · 5.8%</option></select></label><button class="button primary" ${!canAdult()?'disabled':''}>Open FD</button></form><form id="bank-loan-form"><h4>Apply for personal loan</h4><label>Amount (INR)<input name="amount" type="number" min="1000" required placeholder="50000"></label><label>Term<select name="term"><option value="4">4 quarters</option><option value="8">8 quarters</option><option value="12">12 quarters</option></select></label><button class="button secondary" ${!canAdult()?'disabled':''}>Apply for loan</button><small>Indicative limit based on credit profile; simulated rate 2.4% quarterly.</small></form></div>`);
   }
@@ -651,60 +803,81 @@
   function showExchangeModal() { formModal('Currency exchange',`<form id="exchange-form"><label>From<select name="from">${Object.keys(CURRENCIES).map(c=>`<option>${c}</option>`).join('')}</select></label><label>To<select name="to">${Object.keys(CURRENCIES).map(c=>`<option ${c==='USD'?'selected':''}>${c}</option>`).join('')}</select></label><label>Amount<input name="amount" type="number" min="0.01" step="0.01" required></label><p class="muted">Fixed simulation rates; 1.5% transaction fee. Not connected to live forex.</p><button class="button primary">Exchange</button></form>`); }
 
   function header() {
-    return `<header class="topbar"><a class="brand" href="#home" data-tab="home"><span class="brand-mark">L<span>&</span>E</span><span><b>LIFE & EMPIRE</b><small>YOUR STORY. YOUR WORLD.</small></span></a><div class="top-actions"><button class="icon-button install-top" data-action="install-guide" title="Install app">⇩</button><button class="icon-button" data-action="settings" title="Save and settings">⚙</button></div></header>`;
+    return `<header class="compact-topbar"><div class="brand"><span class="brand-mark">L<span>&</span>E</span><span><b>LIFE & EMPIRE</b><small>INDIA · BUILD YOUR LEGACY</small></span></div><div class="top-actions"><button class="icon-button install-top" data-action="install-guide" title="Install app">⇩</button><button class="icon-button" data-action="settings" title="Save and settings">⚙</button></div></header>`;
   }
-  function bar(label,value,tone='') { return `<div class="meter"><div class="meter-head"><span>${label}</span><b>${Math.round(value)}/100</b></div><div class="meter-track"><i class="${tone}" style="width:${clamp(value)}%"></i></div></div>`; }
-  function stat(label,value,small='') { return `<div class="stat-card"><span>${label}</span><strong>${value}</strong><small>${small}</small></div>`; }
-  function tabNav() { const tabs=[['home','⌂','Life'],['identity','◉','Identity'],['career','▤','Education'],['bank','₹','Bank & Markets'],['business','▦','Empire'],['world','◎','World']];return `<nav class="tabbar" aria-label="Game sections">${tabs.map(([id,ic,l])=>`<button data-tab="${id}" class="tab ${activeTab===id?'active':''}"><span>${ic}</span><small>${l}</small></button>`).join('')}</nav>`; }
-  function quarterPanel() { return `<section class="quarter-card"><div><span class="eyebrow">SIMULATION CLOCK</span><h2>Year ${game.time.year} · Quarter ${game.time.quarter}</h2><p>Age ${game.player.age} · ${ageStage(game.player.age)} · ${game.time.actionPoints} / ${ACTIONS_PER_QUARTER} decisions left</p></div><div class="quarter-side"><b>${game.time.actionPoints}</b><small>DECISIONS</small></div><button class="button primary end-quarter" data-action="end-quarter">End quarter ↗</button></section>`; }
-  function actionCards() { return `<div class="action-grid">${actionOptions().map(([id,ic,name,desc,en,stress])=>`<button class="action-card" data-action="life-action" data-id="${id}" ${game.time.actionPoints<1||game.player.energy<en?'disabled':''}><span class="action-icon">${ic}</span><span class="action-title">${name}</span><span class="action-desc">${desc}</span><span class="action-cost">⚡ ${en} energy · 1 decision</span></button>`).join('')}</div>`; }
-  function journalPanel(limit=6) { return `<section class="panel"><div class="section-head"><div><span class="eyebrow">LIFE LOG</span><h3>Recent events</h3></div><span class="muted small">${game.journal.length} entries</span></div>${game.journal.slice(0,limit).map(e=>`<div class="log-row"><span class="log-dot ${esc(e.type)}"></span><div><p>${esc(e.text)}</p><small>${e.year} · Q${e.quarter}</small></div></div>`).join('')||'<p class="muted">Your story starts here.</p>'}</section>`; }
-
+  function compactStat(label,value,tone='') { return `<div class="index-chip"><small>${label}</small><b class="${tone}">${value}</b></div>`; }
+  function stat(label,value,small='') { return `<div class="stat-card"><span>${label}</span><strong>${value}</strong>${small?`<small>${small}</small>`:''}</div>`; }
+  function hudStrip() {
+    const p=game.player;const face=p.age<3?'👶':p.age<13?(p.presentation==='girl'?'👧':'🧒'):p.age<18?(p.presentation==='girl'?'👩':'🧑'):(p.presentation==='girl'?'👩':'🧑');
+    const pnl=game.economy.quarter.income+game.economy.quarter.support+game.economy.quarter.assetSales-game.economy.quarter.expenses-game.economy.quarter.investments-game.economy.quarter.debtService+game.economy.quarter.financing;
+    return `<section class="hud-strip"><div class="character-index"><div class="hud-avatar">${face}</div><div class="hud-person"><b>${esc(p.name)}</b><small>Age ${p.age} · ${ageStage(p.age)} · ${game.player.city}</small><div class="mini-meters"><i title="Health" class="health" style="width:${p.health}%"></i><i title="Energy" class="energy" style="width:${p.energy}%"></i><i title="Stress" class="stress" style="width:${p.stress}%"></i><i title="Happiness" class="happy" style="width:${p.happiness}%"></i></div></div></div><div class="finance-index"><div>${compactStat('CASH',fmt(accountTotal()))}${compactStat('NET WORTH',fmt(netWorth()))}${compactStat('Q FLOW',`${pnl>=0?'+':''}${fmt(pnl)}`,pnl>=0?'positive':'negative')}</div><small class="quarter-index">${game.time.year} · Q${game.time.quarter} · ${game.time.actionPoints}/${ACTIONS_PER_QUARTER} moves</small></div></section>`;
+  }
+  function compactNav() {
+    const tabs=[['home','⌂','Life'],['identity','◉','Self'],['career','▤','School'],['bank','▣','Bank'],['market','↗','Market'],['economy','Σ','Economy'],['business','▦','Empire'],['world','◎','World']];
+    return `<nav class="compact-tabbar" aria-label="Game sections">${tabs.map(([id,ic,l])=>`<button data-tab="${id}" class="compact-tab ${activeTab===id?'active':''}"><span>${ic}</span><small>${l}</small></button>`).join('')}</nav>`;
+  }
+  function actionDock() {
+    const options=actionOptions();const featured=options.slice(0,4);
+    return `<footer class="action-dock"><div class="dock-action-row">${featured.map(([id,ic,name,desc,en])=>`<button class="dock-action" data-action="life-action" data-id="${id}" ${game.time.actionPoints<1||game.player.energy<en?'disabled':''}><span>${ic}</span><b>${name}</b></button>`).join('')}<button class="dock-action more" data-action="more-actions"><span>＋</span><b>More</b></button><button class="dock-end" data-action="end-quarter"><span>Ⅱ</span><b>End Q</b></button></div><div class="dock-caption"><span>${game.time.actionPoints} decisions left</span><span>Actions affect energy · stress · skills</span><span>${game.time.year} / Q${game.time.quarter}</span></div>${compactNav()}</footer>`;
+  }
+  function meterTiny(label,val,cls='') { return `<div class="tiny-meter"><div><span>${label}</span><b>${Math.round(val)}</b></div><i><em class="${cls}" style="width:${clamp(val)}%"></em></i></div>`; }
+  function latestEvents(n=5) { return game.journal.slice(0,n).map(e=>`<div class="event-line"><i class="${esc(e.type)}"></i><div><b>${esc(e.text)}</b><small>${e.year} · Q${e.quarter}</small></div></div>`).join('')||'<div class="empty-line">Your story starts here.</div>'; }
   function renderHome() {
-    const p=game.player; const familyMode=p.age<18; const role=game.career.job?game.career.job.title:p.age<18?`Student · ${p.age<6?'Early years':`Grade ${game.school.grade||1}`}`:'Exploring opportunities';
-    return `<div class="page-head"><div><span class="eyebrow">LIFE OVERVIEW</span><h1>Hello, ${esc(p.name)}.</h1><p>${ageStage(p.age)} · ${esc(p.city)}, ${esc(CITIES[p.city].state)} · ${role}</p></div><div class="avatar ${p.appearance}">${p.presentation==='girl'?'👩':p.presentation==='boy'?'👨':'🧑'}</div></div>${quarterPanel()}<section class="metric-grid">${stat('Net worth',fmt(netWorth()),'All personal and business assets')}${stat('Cash & bank',fmt(accountTotal()),'Available INR accounts')}${stat('Health',`${Math.round(p.health)}%`,p.health<35?'Needs attention':'Current condition')}${stat('Education',p.age<18?(p.age<6?'Early learning':`Grade ${game.school.grade||1}`):game.career.education>=2?'Graduate':game.career.college||'Skill building','Learning journey')}</section><section class="panel"><div class="section-head"><div><span class="eyebrow">YOUR WELLBEING</span><h3>Mind, body & balance</h3></div><span class="pill ${p.stress>70?'danger':p.energy<25?'warning':'good'}">${p.stress>70?'High stress':p.energy<25?'Low energy':'Balanced'}</span></div><div class="needs-grid">${bar('Energy',p.energy,'energy')}${bar('Happiness',p.happiness,'happy')}${bar('Stress',p.stress,'stress')}${bar('Health',p.health,'health')}${bar('Social wellbeing',p.social,'social')}${bar('Confidence',p.confidence,'confidence')}</div><div class="attribute-strip"><span>🧠 Smarts <b>${Math.round(p.smarts)}</b></span><span>💪 Fitness <b>${Math.round(p.fitness)}</b></span><span>🎨 Creativity <b>${Math.round(p.creativity)}</b></span><span>🎯 Discipline <b>${Math.round(p.discipline)}</b></span></div></section><section class="panel"><div class="section-head"><div><span class="eyebrow">DECISIONS</span><h3>${familyMode?'Shape your childhood':'Choose how to spend this quarter'}</h3><p class="muted">You can make up to three meaningful decisions before the quarter settles.</p></div></div>${actionCards()}</section>${familyMode?`<section class="panel family-strip"><div><span class="eyebrow">FAMILY HOUSEHOLD</span><h3>${fmt(game.family.funds)} family reserve</h3><p>Parents' household income ${fmt(game.family.quarterlyIncome)} / quarter · Family bond ${Math.round(game.family.closeness)}%</p></div><span class="family-emoji">🏡</span></section>`:''}${journalPanel(5)}`;
+    const p=game.player;const age=ageStage(p.age);const role=game.career.job?game.career.job.title:p.age<18?(p.age<6?'Early development':`Grade ${game.school.grade||1} student`):'Building a career';
+    return `<div class="board-layout"><section class="board-main"><div class="board-heading"><div><span class="eyebrow">LIVE SIMULATION</span><h1>${p.age<3?'Early life':p.age<18?'Growing up':p.age<60?'Building your future':'Life & legacy'}</h1><p>${esc(p.name)} · ${age} · ${esc(role)}</p></div><span class="scene-badge">${p.age<6?'🏡 Home':p.age<18?'🏫 School':game.career.job?'💼 Work':'🌆 City life'}</span></div><div class="scene-panel"><span class="scene-date">${game.time.year} · QUARTER ${game.time.quarter}</span><h2>${game.journal[0]?esc(game.journal[0].text):'Your life is unfolding.'}</h2><p>${p.age<6?'Early experiences shape attachment, confidence and curiosity.':p.age<18?'School, friends, skills and family choices shape your future.':game.career.job?`${esc(game.career.job.firm)} · Annual salary ${fmt(game.career.job.salary)}.`:'Your decisions shape your income, assets and opportunities.'}</p><div class="scene-bottom"><span>🧠 Smarts ${Math.round(p.smarts)}</span><span>💪 Fitness ${Math.round(p.fitness)}</span><span>✨ Confidence ${Math.round(p.confidence)}</span></div></div><div class="wellbeing-row">${meterTiny('ENERGY',p.energy,'energy')}${meterTiny('STRESS',p.stress,'stress')}${meterTiny('HAPPINESS',p.happiness,'happy')}${meterTiny('HEALTH',p.health,'health')}</div></section><aside class="board-side"><div class="side-title"><b>Recent events</b><small>${game.journal.length} saved</small></div><div class="event-feed">${latestEvents(6)}</div><div class="side-note"><span>🏠 Household</span><b>${p.age<18?fmt(game.family.funds):fmt(accountTotal())}</b><small>${p.age<18?'Family reserve':'Available personal cash'}</small></div><div class="side-note"><span>🎓 Learning</span><b>${p.age<6?'Early years':p.age<18?`Grade ${game.school.grade||1}`:game.career.college|| (game.career.education>=2?'Graduate':'Skills')}</b><small>${p.age<18?`School marks ${game.school.marks}%`:'Career development'}</small></div></aside></div>`;
   }
-
   function renderIdentity() {
-    const p=game.player; const people=game.family.parents.map(x=>`<div class="person-row"><span class="person-avatar">${x.role==='Mother'?'👩':'👨'}</span><div><b>${x.role}</b><small>Age ${x.age} · Health ${Math.round(x.health)}%</small></div><span class="push">Parent</span></div>`).join('')+game.family.siblings.map(x=>`<div class="person-row"><span class="person-avatar">🧒</span><div><b>${x.name}</b><small>Age ${Math.max(0,x.age)} · Sibling</small></div></div>`).join('');
-    return `<div class="page-head"><div><span class="eyebrow">CHARACTER & FAMILY</span><h1>Your identity</h1><p>Personality, abilities, family ties and life stage shape the way your story unfolds.</p></div></div><section class="panel character-card"><div class="character-large">${p.presentation==='girl'?'👧':p.presentation==='boy'?'👦':'🧒'}</div><div class="character-info"><span class="eyebrow">${ageStage(p.age).toUpperCase()}</span><h2>${esc(p.name)}</h2><p>${esc(p.city)} · ${BACKGROUND_LABEL(p.background)}</p><span class="trait-pill">${trait().emoji} ${trait().name}</span><p class="muted small">${trait().desc}</p></div></section><div class="two-col"><section class="panel"><div class="section-head"><div><span class="eyebrow">ATTRIBUTES</span><h3>Character profile</h3></div></div>${[['Smarts',p.smarts],['Fitness',p.fitness],['Creativity',p.creativity],['Discipline',p.discipline],['Charisma',p.charisma],['Confidence',p.confidence],['Resilience',p.resilience],['Social',p.social]].map(x=>bar(x[0],x[1])).join('')}</section><section class="panel"><div class="section-head"><div><span class="eyebrow">FAMILY</span><h3>Your household</h3></div></div>${people}<div class="meter"><div class="meter-head"><span>Family closeness</span><b>${Math.round(game.family.closeness)}%</b></div><div class="meter-track"><i style="width:${game.family.closeness}%"></i></div></div><div class="notice small">Family support: ${Math.round(game.family.support)}% · Background: ${BACKGROUND_LABEL(p.background)}</div></section></div><section class="panel"><div class="section-head"><div><span class="eyebrow">RELATIONSHIPS</span><h3>Your social connections</h3></div></div>${[['Parents & family',game.relationships.parents],['Friends',game.relationships.friends],['Professional network',game.relationships.network],['Partner',game.relationships.partner]].map(x=>`<div class="relation-row"><span>${x[0]}</span><b>${Math.round(x[1])}/100</b><div class="meter-track"><i style="width:${x[1]}%"></i></div></div>`).join('')}${p.partner?`<div class="partner-card"><b>❤️ ${esc(p.partner.name)}</b><p>${p.maritalStatus} · Affection ${Math.round(p.partner.affection)} · Trust ${Math.round(p.partner.trust)}</p><div class="button-row">${p.maritalStatus==='Married'?'':`<button class="button secondary" data-action="marry">${p.maritalStatus==='Engaged'?'Complete wedding':'Propose'}</button>`}<button class="button ghost" data-action="have-child" ${p.maritalStatus!=='Married'||p.age<21?'disabled':''}>Have a child</button></div></div>`:'<p class="muted small">No romantic partner yet. At age 18+, use Meet / spend time with partner in the Life section.</p>'}</section>${p.children.length?`<section class="panel"><h3>Next generation</h3>${p.children.map(c=>`<div class="person-row"><span class="person-avatar">👶</span><div><b>${esc(c.name)}</b><small>Age ${c.age} · Health ${c.health}%</small></div></div>`).join('')}</section>`:''}`;
+    const p=game.player;const relatives=game.family.parents.map(x=>`<div class="compact-person"><span>${x.role==='Mother'?'👩':'👨'}</span><div><b>${x.role}</b><small>Age ${x.age} · Health ${x.health}%</small></div></div>`).join('')+game.family.siblings.map(x=>`<div class="compact-person"><span>🧒</span><div><b>${esc(x.name)}</b><small>Sibling · Age ${Math.max(0,x.age)}</small></div></div>`).join('');
+    return `<div class="compact-board"><div class="board-heading"><div><span class="eyebrow">CHARACTER PROFILE</span><h1>${esc(p.name)}</h1><p>${ageStage(p.age)} · ${BACKGROUND_LABEL(p.background)} · ${p.city}</p></div><span class="scene-badge">${p.presentation==='girl'?'👧':'🧒'} ${trait().emoji} ${trait().name}</span></div><div class="identity-grid"><div class="identity-attributes">${meterTiny('SMARTS',p.smarts)}${meterTiny('FITNESS',p.fitness)}${meterTiny('CREATIVITY',p.creativity)}${meterTiny('DISCIPLINE',p.discipline)}${meterTiny('CHARISMA',p.charisma)}${meterTiny('CONFIDENCE',p.confidence)}</div><div class="identity-family"><b>Family & relationships</b>${relatives}<div class="compact-person"><span>❤️</span><div><b>${p.partner?esc(p.partner.name):'No partner yet'}</b><small>${p.maritalStatus} · ${game.player.children.length} children</small></div></div><div class="family-score">Family bond <b>${Math.round(game.family.closeness)}%</b></div></div></div><div class="compact-footer-note">${trait().desc} · Family support ${Math.round(game.family.support)}%</div></div>`;
   }
   function BACKGROUND_LABEL(key) { return BACKGROUNDS[key]?.label||'Middle class'; }
-
   function renderCareer() {
-    const age=game.player.age,school=game.school,c=game.career;
-    return `<div class="page-head"><div><span class="eyebrow">LEARNING & CAREER</span><h1>Education & work</h1><p>School, college, skills and careers. Early decisions influence later opportunities.</p></div></div><div class="metric-grid">${stat('School',age<6?'Early years':school.completed?school.graduation:`Grade ${school.grade||1}`,`Marks ${school.marks}%`)}${stat('Skills',Object.values(c.skills).reduce((s,x)=>s+x,0),'Combined skill points')}${stat('Experience',c.experience,'Career experience')}${stat('Career',c.job?c.job.title:age<18?'Student':'Not employed',c.job?`${fmt(c.job.salary/4)} / quarter`:'Applications available at 18')}</div>${age<6?`<section class="panel"><span class="eyebrow">EARLY DEVELOPMENT</span><h3>Pre-school years</h3><p class="muted">Learning happens through stories, play, bonding and exploration. Formal school begins at age six.</p><div class="notice">Your early childhood actions contribute to smarts, creativity, confidence and emotional resilience.</div></section>`:age<18?`<section class="panel"><div class="section-head"><div><span class="eyebrow">SCHOOLING</span><h3>${school.schoolName} · Grade ${school.grade||1}</h3></div><span class="pill">${school.marks}% last result</span></div><div class="needs-grid">${bar('Attendance',Math.min(100,school.attendance*16))}${bar('Exam effort',Math.min(100,school.effort*10))}</div><p class="muted">At the end of each school year, results depend on study effort, attendance, intelligence and stress. Complete Grade 12 to unlock college.</p><p>Family education fund: <b>${fmt(game.family.educationFund)}</b></p></section>`:`<section class="panel"><div class="section-head"><div><span class="eyebrow">HIGHER EDUCATION</span><h3>${c.college|| (c.education>=2?'Undergraduate qualification':'Higher education options')}</h3></div>${c.college?`<span class="pill">${c.collegeProgress}/${c.collegeTarget||12} study quarters</span>`:''}</div>${c.college?`<div class="meter"><div class="meter-head"><span>Degree progress</span><b>${Math.round(c.collegeProgress/(c.collegeTarget||12)*100)}%</b></div><div class="meter-track"><i style="width:${Math.min(100,c.collegeProgress/(c.collegeTarget||12)*100)}%"></i></div></div><button class="button primary" data-action="finish-college" ${c.collegeProgress<(c.collegeTarget||12)?'disabled':''}>Graduate</button>`:`<p class="muted">You can study independently, complete an undergraduate degree, then pursue postgraduate study or build experience at work.</p><button class="button primary" data-action="college">Explore college courses</button>${c.education>=2&&age>=21?'<button class="button secondary" data-action="postgrad">Explore postgraduate study · 8 quarters</button>':''}`}<p class="muted small">School result: ${school.graduation||'Passed'} · Skill-based learning remains available at any age.</p></section>`}<section class="panel"><div class="section-head"><div><span class="eyebrow">SKILLS</span><h3>Skills & capabilities</h3></div></div><div class="skills-grid">${Object.entries(c.skills).map(([k,v])=>`<div class="skill-card"><span>${skillName(k)}</span><b>${Math.round(v)}</b><div class="meter-track"><i style="width:${v}%"></i></div></div>`).join('')}</div></section>${age>=18?`<section class="panel"><div class="section-head"><div><span class="eyebrow">EMPLOYMENT</span><h3>${c.job?c.job.title:'Explore available jobs'}</h3></div><span class="pill ${c.job?'good':''}">${c.job?'Employed':'Job seeker'}</span></div>${c.job?`<p>${c.job.firm} · Annual salary ${fmt(c.job.salary)} · Level ${c.job.level}</p><div class="needs-grid">${bar('Performance',c.performance)}${bar('Career progress',Math.min(100,c.tenure/8*100))}</div><div class="button-row"><button class="button primary" data-action="promotion" ${c.tenure<8||c.performance<70?'disabled':''}>Request promotion</button><button class="button secondary" data-action="resign">Resign</button></div>`:`<p class="muted">Applications require the relevant qualification and skill level. Applying costs one decision slot.</p><button class="button primary" data-action="jobs">Browse job market</button>`}</section>`:''}`;
+    const p=game.player,c=game.career,sc=game.school;
+    const grade=p.age<6?'Pre-school':p.age<18?`Grade ${sc.grade||1} · ${sc.schoolName}`:c.college||`Education level ${c.education}`;
+    const skills=Object.entries(c.skills).map(([k,v])=>`<div class="skill-mini"><span>${skillName(k)}</span><b>${Math.round(v)}</b><i><em style="width:${v}%"></em></i></div>`).join('');
+    return `<div class="compact-board"><div class="board-heading"><div><span class="eyebrow">EDUCATION & CAREER</span><h1>${p.age<6?'Learning foundations':p.age<18?'School journey':'Career & qualifications'}</h1><p>${grade}</p></div><span class="pill">${p.age<18?`Marks ${sc.marks}%`:c.job?'Employed':'Career path'}</span></div><div class="career-focus"><div><small>ACADEMIC PROGRESS</small><b>${p.age<6?'Early development':p.age<18?`${Math.round(sc.attendance)} attendance · ${Math.round(sc.effort)} study`:c.education>=2?'Graduate':c.college?`${c.collegeProgress}/${c.collegeTarget} college quarters`:'Skills & experience'}</b><p>${p.age<6?'Reading, play and bonding build future readiness.':p.age<18?'Attendance and focused study influence annual examination results.':c.job?`${esc(c.job.title)} · ${fmt(c.job.salary)} / year`:'Complete education, then apply for work.'}</p></div>${p.age>=18?`<button class="button small primary" data-action="jobs" ${c.job?'disabled':''}>Jobs</button>`:`<span class="grade-mark">${p.age<6?'👶':'📚'}</span>`}</div><div class="skills-compact">${skills}</div>${p.age>=18&&c.job?`<div class="career-stats"><span>Performance <b>${Math.round(c.performance)}%</b></span><span>Tenure <b>${c.tenure}Q</b></span><span>Experience <b>${c.experience}</b></span></div>`:''}</div>`;
   }
-
   function renderBank() {
-    const holdings=Object.entries(game.portfolio.stocks).filter(x=>x[1]>0); const stockRows=game.market.stocks.map(s=>`<tr><td><b>${s.id}</b><small>${s.name}</small></td><td>${fmt(s.price)}</td><td class="${s.change>=0?'positive':'negative'}">${s.change>=0?'+':''}${(s.change*100).toFixed(2)}%</td><td>${game.portfolio.stocks[s.id]||0}</td><td><button class="button mini secondary" data-action="trade" data-id="${s.id}" ${!canAdult()?'disabled title="Market dealing unlocks at age 18"':''}>Trade</button></td></tr>`).join('');
-    return `<div class="page-head"><div><span class="eyebrow">PERSONAL FINANCE SYSTEM</span><h1>Bank & markets</h1><p>Manage cash, bank accounts, deposits, credit, securities and your investment portfolio.</p></div></div><div class="market-banner"><div><span class="eyebrow">SIMULATED INDIA MARKET INDEX</span><h2>${num(game.market.index)}</h2><p>Quarter sentiment ${game.market.sentiment>=0?'+':''}${game.market.sentiment.toFixed(1)} · Inflation ${game.market.inflation.toFixed(1)}% · Policy rate ${game.market.repoRate.toFixed(1)}%</p></div><div class="market-spark">${[18,26,20,38,29,52,44,65,57,72].map(h=>`<i style="height:${h}%"></i>`).join('')}</div></div><section class="metric-grid">${stat('Current account',fmt(game.bank.current),'Daily banking')}${stat('Savings',fmt(game.bank.savings),'3.5% annual simulated interest')}${stat('Fixed deposits',fmt(game.bank.fixedDeposits.reduce((s,x)=>s+x.principal+(x.accrued||0),0)),`${game.bank.fixedDeposits.length} active deposits`)}${stat('Credit score',Math.round(game.bank.creditScore),'Simulated credit profile')}</section><section class="panel"><div class="section-head"><div><span class="eyebrow">BANKING</span><h3>Accounts & credit</h3></div><button class="button primary" data-action="banking">Bank actions</button></div><div class="account-row"><span>👛 Pocket cash</span><b>${fmt(game.wallet.INR)}</b></div><div class="account-row"><span>🏦 Current account</span><b>${fmt(game.bank.current)}</b></div><div class="account-row"><span>💰 Savings account</span><b>${fmt(game.bank.savings)}</b></div><div class="account-row"><span>🔒 Fixed deposits</span><b>${game.bank.fixedDeposits.length}</b></div><div class="account-row"><span>📉 Outstanding loans</span><b class="${game.bank.loans.length?'negative':''}">${fmt(game.bank.loans.reduce((s,l)=>s+l.balance,0))}</b></div><h4 class="subheading">International currency wallets</h4><div class="currency-grid">${Object.entries(CURRENCIES).filter(([code])=>code!=='INR').map(([code,c])=>`<div><span>${code}</span><b>${num(game.wallet[code]||0,2)}</b><small>1 ${code} = ${fmt(c.rate)}</small></div>`).join('')}</div>${game.bank.fixedDeposits.map(fd=>`<div class="notice small">FD ${fmt(fd.principal)} · ${(fd.rate*100).toFixed(1)}% · ${fd.remaining} quarters remaining · accrued ${fmt(fd.accrued||0)}</div>`).join('')}${game.bank.loans.map(l=>`<div class="loan-row"><div><b>${l.emergency?'Emergency loan':'Personal loan'}</b><small>${fmt(l.balance)} outstanding · ${(l.rate*100).toFixed(1)}% per quarter · ${l.remaining||0} scheduled payments left</small></div><button class="button mini secondary" data-action="repay-loan" data-id="${l.id}">Repay</button></div>`).join('')}<div class="button-row"><button class="button secondary" data-action="exchange" ${!canAdult()?'disabled':''}>Currency exchange</button><button class="button ghost" data-action="insurance" ${!canAdult()?'disabled':''}>${game.bank.insurance?`Health cover active · ${game.bank.insuranceQuarters}Q left`:'Explore health cover'}</button></div></section><section class="panel"><div class="section-head"><div><span class="eyebrow">STOCK EXCHANGE</span><h3>Listed companies</h3><p class="muted">Fictional companies; prices update every quarter according to fundamentals and market sentiment. ${canAdult()?'':'Market dealing unlocks when you become an adult; your childhood savings account remains available.'}</p></div></div><div class="table-wrap"><table><thead><tr><th>Company</th><th>Price</th><th>1Q move</th><th>Owned</th><th>Action</th></tr></thead><tbody>${stockRows}</tbody></table></div></section><section class="panel"><div class="section-head"><div><span class="eyebrow">INVESTMENT PRODUCTS</span><h3>Portfolio</h3></div></div><div class="metric-grid">${stat('Shares',fmt(holdings.reduce((sum,[id,q])=>sum+q*(stock(id)?.price||0),0)),`${holdings.length} companies`)}${stat('Mutual fund',fmt(game.portfolio.fundValue),`${num(game.portfolio.fundUnits,3)} units`)}${stat('Digital gold',fmt(game.portfolio.goldValue),`${num(game.portfolio.goldGrams,3)} grams`)}${stat('Total investments',fmt(totalInvested()),'Including fixed deposits')}</div><div class="button-row"><button class="button primary" data-action="invest-fund" ${!canAdult()?'disabled':''}>Buy / redeem mutual fund</button><button class="button secondary" data-action="invest-gold" ${!canAdult()?'disabled':''}>Buy / sell digital gold</button></div></section>`;
+    const b=game.bank,owned=b.ownedBanks||[];
+    const bankCards=owned.map(x=>`<div class="owned-bank-card"><div class="owned-bank-title"><span>🏦</span><div><b>${esc(x.name)}</b><small>${x.city} · ${x.branches} branch${x.branches===1?'':'es'} · Trust ${Math.round(x.trust)}%</small></div><strong class="${x.profit>=0?'positive':'negative'}">${x.profit>=0?'+':''}${fmt(x.profit)}</strong></div><div class="owned-bank-metrics"><span>Vault <b>${fmt(x.cash)}</b></span><span>Deposits <b>${fmt(x.deposits)}</b></span><span>Loan book <b>${fmt((x.publicLoanBook||0)+x.playerLoans.reduce((v,l)=>v+l.balance,0))}</b></span></div><button class="button small secondary" data-action="manage-owned-bank" data-id="${x.id}">Open bank dashboard</button></div>`).join('');
+    const bankLaunch=owned.length<3?`<div class="bank-opportunity"><span>🏛️</span><div><b>Establish another bank</b><small>₹85 lakh funding · Bank capital, lending and deposit strategy · ${3-owned.length} ownership slot(s) remaining</small></div><button class="button mini primary" data-action="establish-bank" ${!canAdult()||accountTotal()<8500000?'disabled':''}>＋ Bank</button></div>`:`<div class="small-footnote">You have reached the three-bank ownership limit for this build.</div>`;
+    return `<div class="compact-board"><div class="board-heading"><div><span class="eyebrow">PERSONAL BANKING</span><h1>Bank & credit</h1><p>Control personal money, deposits, credit and owned banks.</p></div><span class="scene-badge">🏦 ${Math.round(b.creditScore)} credit</span></div><div class="bank-account-grid"><div><small>POCKET & CURRENT</small><b>${fmt((game.wallet.INR||0)+b.current)}</b></div><div><small>SAVINGS</small><b>${fmt(b.savings)}</b></div><div><small>FIXED DEPOSITS</small><b>${fmt(b.fixedDeposits.reduce((v,x)=>v+x.principal+(x.accrued||0),0))}</b></div><div><small>PERSONAL LOANS</small><b class="negative">${fmt(b.loans.reduce((v,x)=>v+x.balance,0)+owned.reduce((v,x)=>v+x.playerLoans.reduce((z,l)=>z+l.balance,0),0))}</b></div></div><div class="compact-button-row"><button class="button small primary" data-action="banking">Bank actions</button><button class="button small ghost" data-action="exchange" ${!canAdult()?'disabled':''}>FX exchange</button><button class="button small secondary" data-action="insurance" ${!canAdult()?'disabled':''}>Insurance</button></div><div class="bank-subsection"><div class="side-title"><b>Your financial institutions</b><small>${owned.length}/3 owned</small></div>${owned.length?`<div class="bank-card-grid">${bankCards}</div>`:`<div class="bank-opportunity"><span>🏛️</span><div><b>Establish your first bank</b><small>₹85 lakh funding · Deposits · Public lending · Owner credit · Branch expansion</small></div><button class="button mini primary" data-action="establish-bank" ${!canAdult()||accountTotal()<8500000?'disabled':''}>Establish</button></div>`}${owned.length?bankLaunch:''}<div class="small-footnote">Personal deposits are assets to you and liabilities to the bank. Loans from your own bank are recorded both as a bank loan asset and a personal debt. Your banks have separate cash, fixed assets, deposit liabilities, customer lending and retained equity.</div></div></div>`;
   }
-
+  function renderMarket() {
+    const holdings=Object.entries(game.portfolio.stocks).filter(x=>x[1]>0);const equityValue=holdings.reduce((a,[id,q])=>a+q*(stock(id)?.price||0),0);
+    const marketRows=game.market.stocks.slice().sort(marketSort==='price'?((a,b)=>a.price-b.price):marketSort==='dividend'?((a,b)=>b.dividend-a.dividend):marketSort==='name'?((a,b)=>a.name.localeCompare(b.name)):((a,b)=>b.change-a.change));
+    const rows=marketRows.map(s=>`<div class="market-row"><div class="ticker-avatar">${s.id.slice(0,1)}</div><div class="ticker-name"><b>${s.id}</b><small>${s.name} · ${s.sector}</small></div><div class="ticker-price"><b>${fmt(s.price)}</b><small class="${s.change>=0?'positive':'negative'}">${s.change>=0?'+':''}${(s.change*100).toFixed(2)}%</small></div><button class="button mini secondary" data-action="trade" data-id="${s.id}" ${!canAdult()?'disabled':''}>Trade</button></div>`).join('');
+    return `<div class="compact-board market-board"><div class="board-heading"><div><span class="eyebrow">INVESTMENT EXCHANGE</span><h1>Markets</h1><p>Fictional listed companies · Simulated prices, not live trading.</p></div><div class="market-index"><small>INDEX</small><b>${num(game.market.index)}</b><span>Q ${game.market.sentiment>=0?'+':''}${game.market.sentiment.toFixed(1)}</span></div></div><div class="market-product-row"><div><small>SHARES</small><b>${fmt(equityValue)}</b></div><div><small>MUTUAL FUND</small><b>${fmt(game.portfolio.fundValue)}</b></div><div><small>GOLD</small><b>${fmt(game.portfolio.goldValue)}</b></div><div><small>GOLD RATE</small><b>${fmt(game.market.goldPrice)}/g</b></div></div><div class="market-sort"><div class="market-sort-chips"><button data-action="market-sort" data-id="movers" class="${marketSort==='movers'?'active':''}">Movers</button><button data-action="market-sort" data-id="price" class="${marketSort==='price'?'active':''}">Price</button><button data-action="market-sort" data-id="dividend" class="${marketSort==='dividend'?'active':''}">Dividend</button><button data-action="market-sort" data-id="name" class="${marketSort==='name'?'active':''}">Name</button></div><span>Brokerage 0.15% · ${holdings.length} positions</span></div><div class="market-list">${rows}</div><div class="market-trade-tools"><button class="button small primary" data-action="invest-fund" ${!canAdult()?'disabled':''}>Fund</button><button class="button small secondary" data-action="invest-gold" ${!canAdult()?'disabled':''}>Gold</button><button class="button small ghost" data-action="exchange" ${!canAdult()?'disabled':''}>Currency</button></div></div>`;
+  }
+  function renderEconomy() {
+    const q=game.economy.quarter,h=game.economy.history[0]||{};const net=q.income+q.support+q.assetSales+q.financing-q.expenses-q.investments-q.debtService+q.marketChange;
+    const businessRevenue=game.businesses.reduce((v,x)=>v+x.revenue,0),businessCosts=game.businesses.reduce((v,x)=>v+x.costs,0),businessProfit=game.businesses.reduce((v,x)=>v+x.profit,0),bankProfit=game.bank.ownedBanks.reduce((v,x)=>v+(x.profit||0),0);
+    const rows=[['Earned income',q.income,'positive'],['Household support',q.support,'positive'],['Asset sales',q.assetSales,'positive'],['Financing / loans',q.financing,'positive'],['Living & operating expenses',-q.expenses,'negative'],['Asset purchases / investment',-q.investments,'neutral'],['Debt repayments',-q.debtService,'negative'],['Market valuation change',q.marketChange,q.marketChange>=0?'positive':'negative']];
+    return `<div class="compact-board"><div class="board-heading"><div><span class="eyebrow">ECONOMIC VIEW</span><h1>Money in · Money out</h1><p>Personal cash flow is separated from investment purchases and business results.</p></div><span class="scene-badge">${game.time.year} · Q${game.time.quarter}</span></div><div class="economic-summary"><div><small>QUARTER NET CASH FLOW</small><b class="${net>=0?'positive':'negative'}">${net>=0?'+':''}${fmt(net)}</b></div><div><small>PERSONAL CASH FLOW</small><b>${fmt(q.income+q.support-q.expenses)}</b></div></div><div class="economic-columns"><div class="economic-ledger">${rows.map(([l,v,c])=>`<div class="ledger-row"><span>${l}</span><b class="${c==='neutral'?'':c}">${v>=0?'+':''}${fmt(v)}</b></div>`).join('')}</div><div class="economic-side"><div class="econ-mini"><small>COMPANY REVENUE</small><b>${fmt(businessRevenue)}</b></div><div class="econ-mini"><small>COMPANY COSTS</small><b>${fmt(businessCosts)}</b></div><div class="econ-mini"><small>COMPANY PROFIT</small><b class="${businessProfit>=0?'positive':'negative'}">${fmt(businessProfit)}</b></div><div class="econ-mini"><small>OWNED BANK PROFIT</small><b class="${bankProfit>=0?'positive':'negative'}">${fmt(bankProfit)}</b></div></div></div><div class="economy-history"><div class="side-title"><b>Last quarter result</b><small>${h.year?`${h.year} · Q${h.quarter}`:'No settled quarter yet'}</small></div><div class="history-pills"><span>Income ${fmt(h.income||0)}</span><span>Expenses ${fmt(h.expenses||0)}</span><span>Investments ${fmt(h.investments||0)}</span><span>Net ${fmt(h.net||0)}</span></div></div><div class="small-footnote">Purchasing stocks, gold, FDs, property or companies is classified as investment—not a consumption expense. Loan proceeds are financing, not earnings. Market changes are unrealised valuation changes.</div></div>`;
+  }
   function renderBusiness() {
-    const cards=game.businesses.map(b=>{const spec=BUSINESS_TYPES.find(x=>x.id===b.type);return `<article class="business-card"><div class="business-top"><span class="business-icon">${spec.emoji}</span><div><h3>${b.name}</h3><small>${spec.industry} · ${b.city} · Level ${b.level}</small></div><span class="push pill ${b.profit>=0?'good':'danger'}">${b.profit>=0?'+':''}${fmt(b.profit)} last quarter</span></div><div class="business-metrics">${stat('Company cash',fmt(b.cash),'Working capital')}${stat('Inventory',num(b.inventory),spec.output)}${stat('Employees',b.employees,'Payroll per quarter')}${stat('Units sold',num(b.lastUnits),'Last settlement')}</div><div class="account-row"><span>Last revenue</span><b>${fmt(b.revenue)}</b></div><div class="account-row"><span>Last operating costs</span><b>${fmt(b.costs)}</b></div><div class="account-row"><span>Current asking price</span><b>${fmt(b.price)} / unit</b></div><button class="button secondary full" data-action="manage-business" data-id="${b.id}">Manage company</button></article>`;}).join('');
-    return `<div class="page-head"><div><span class="eyebrow">CORPORATE GROUP</span><h1>Empire builder</h1><p>Own productive companies, manage workers and working capital, and connect suppliers to manufacturers and retailers.</p></div></div><div class="metric-grid">${stat('Companies',game.businesses.length,'Maximum five')}${stat('Company cash',fmt(game.businesses.reduce((s,b)=>s+b.cash,0)),'Across all companies')}${stat('Last quarter profit',fmt(game.businesses.reduce((s,b)=>s+b.profit,0)),'Combined company result')}${stat('Business value',fmt(game.businesses.reduce((s,b)=>s+b.value,0)),'Estimated operating value')}</div><section class="panel"><div class="section-head"><div><span class="eyebrow">YOUR COMPANIES</span><h3>Operating businesses</h3></div><button class="button primary" data-action="new-business" ${!canAdult()||game.businesses.length>=5?'disabled':''}>＋ Establish</button></div>${cards||'<div class="empty-state"><div>🏗️</div><h3>Your empire starts here</h3><p>Start a farm, mill, store, electronics workshop or software studio after age 18.</p></div>'}</section><section class="panel"><div class="section-head"><div><span class="eyebrow">SUPPLY CHAIN</span><h3>How production links work</h3></div></div><div class="chain"><div><span>🌾</span><b>Paddy Farm</b><small>Creates paddy inventory</small></div><i>→</i><div><span>🏭</span><b>Rice Mill</b><small>Consumes paddy, produces rice</small></div><i>→</i><div><span>🛒</span><b>Grocery Store</b><small>Buys rice, sells to households</small></div></div><p class="muted small">Owned farms can supply owned mills; owned mills can supply owned grocery stores. If your own upstream company lacks stock, the downstream company buys from simulated outside suppliers. Output, inventory, staffing, operating costs, demand, selling price and sales affect quarterly company results.</p></section><section class="panel"><div class="section-head"><div><span class="eyebrow">PROPERTY & ASSETS</span><h3>Real estate</h3></div><button class="button secondary" data-action="property-market" ${!canAdult()?'disabled':''}>Property market</button></div>${game.properties.length?game.properties.map(p=>`<div class="account-row"><span>🏠 ${p.name} · ${p.city}</span><b>${fmt(p.value)}</b></div><small class="muted">Rent ${fmt(p.rent)} / quarter · maintenance ${fmt(p.maintenance)}</small>`).join(''):'<p class="muted">You do not own property yet. Property can generate rent, but maintenance is deducted each quarter.</p>'}</section>`;
+    const companies=game.businesses.map(b=>{const sp=BUSINESS_TYPES.find(x=>x.id===b.type);return `<div class="empire-row"><span>${sp.emoji}</span><div><b>${esc(b.name)}</b><small>${b.city} · ${b.employees} staff · ${num(b.inventory)} inventory</small></div><strong class="${b.profit>=0?'positive':'negative'}">${b.profit>=0?'+':''}${fmt(b.profit)}</strong><button class="button mini secondary" data-action="manage-business" data-id="${b.id}">Manage</button></div>`;}).join('');
+    return `<div class="compact-board"><div class="board-heading"><div><span class="eyebrow">CORPORATE EMPIRE</span><h1>Companies & assets</h1><p>Operating businesses, real estate and banking ownership.</p></div><button class="button small primary" data-action="new-business" ${!canAdult()||game.businesses.length>=5?'disabled':''}>＋ Company</button></div><div class="empire-metrics"><div><small>COMPANIES</small><b>${game.businesses.length}</b></div><div><small>LAST PROFIT</small><b class="${game.businesses.reduce((v,x)=>v+x.profit,0)>=0?'positive':'negative'}">${fmt(game.businesses.reduce((v,x)=>v+x.profit,0))}</b></div><div><small>ASSET VALUE</small><b>${fmt(game.businesses.reduce((v,x)=>v+x.value,0)+game.properties.reduce((v,x)=>v+x.value,0))}</b></div></div><div class="empire-list">${companies||'<div class="empty-line">No companies yet. Establish your first company when you reach adulthood.</div>'}</div><div class="empire-bottom"><div class="supply-mini"><span>🌾 Farm</span><i>→</i><span>🏭 Mill</span><i>→</i><span>🛒 Retail</span></div><button class="button mini ghost" data-action="property-market" ${!canAdult()?'disabled':''}>Property market</button></div></div>`;
   }
-
   function renderWorld() {
-    const options=Object.entries(CITIES).map(([name,c])=>`<article class="city-card ${name===game.player.city?'selected':''}"><div class="city-icon">${c.emoji}</div><div><b>${name}</b><small>${c.state} · Cost index ${c.cost.toFixed(2)} · Demand ${c.demand.toFixed(2)}</small></div>${name===game.player.city?'<span class="pill good">Current</span>':`<button class="button mini secondary" data-action="move-city" data-id="${name}" ${!canAdult()?'disabled':''}>Move</button>`}</article>`).join('');
-    return `<div class="page-head"><div><span class="eyebrow">INDIA & THE WORLD</span><h1>World & society</h1><p>Move between Indian cities, understand local cost and demand, and maintain a social life.</p></div></div><section class="panel"><div class="section-head"><div><span class="eyebrow">CURRENT LOCATION</span><h3>${CITIES[game.player.city].emoji} ${game.player.city}, ${CITIES[game.player.city].state}</h3></div><span class="pill">${ageStage(game.player.age)}</span></div><div class="metric-grid">${stat('Living cost index',city().cost.toFixed(2),'Relative to Hyderabad')}${stat('Demand index',city().demand.toFixed(2),'Retail and service market')}${stat('Wage index',city().wage.toFixed(2),'Local labour costs')}${stat('Current inflation',game.market.inflation.toFixed(1)+'%','Simulated national inflation')}</div></section><section class="panel"><div class="section-head"><div><span class="eyebrow">CITY NETWORK</span><h3>Explore Indian cities</h3></div></div><div class="city-grid">${options}</div><p class="muted small">Relocation costs ₹18,000 and is available from age 18. The city changes personal living costs and local company demand/wages.</p></section><section class="panel"><div class="section-head"><div><span class="eyebrow">FAMILY LIFE</span><h3>Household & future generations</h3></div></div><div class="account-row"><span>Relationship status</span><b>${game.player.maritalStatus}</b></div><div class="account-row"><span>Children</span><b>${game.player.children.length}</b></div><div class="account-row"><span>Family bond</span><b>${Math.round(game.family.closeness)}%</b></div>${game.player.partner?`<div class="button-row"><button class="button secondary" data-action="marry">${game.player.maritalStatus==='Engaged'?'Complete wedding':game.player.maritalStatus==='Married'?'Marriage status':'Propose marriage'}</button><button class="button ghost" data-action="have-child" ${game.player.maritalStatus!=='Married'||game.player.age<21?'disabled':''}>Have a child</button></div>`:'<p class="muted">Build relationships in the Life section. Dating and family formation unlock in adulthood.</p>'}</section>`;
+    const cities=Object.entries(CITIES);return `<div class="compact-board"><div class="board-heading"><div><span class="eyebrow">WORLD & SOCIETY</span><h1>${city().emoji} ${game.player.city}</h1><p>${CITIES[game.player.city].state} · Cost ${city().cost.toFixed(2)} · Demand ${city().demand.toFixed(2)}</p></div><span class="scene-badge">🇮🇳 INDIA</span></div><div class="world-current"><div><small>HOUSEHOLD / FAMILY</small><b>${game.player.maritalStatus} · ${game.player.children.length} children</b></div><div><small>INFLATION</small><b>${game.market.inflation.toFixed(1)}%</b></div><div><small>WAGES INDEX</small><b>${city().wage.toFixed(2)}</b></div></div><div class="city-picker"><label for="city-select">Relocate to</label><select id="city-select">${cities.map(([n,c])=>`<option value="${n}" ${n===game.player.city?'selected':''}>${c.emoji} ${n} · ${c.state}</option>`).join('')}</select><button class="button small secondary" data-action="move-selected-city" ${!canAdult()?'disabled':''}>Move · ₹18,000</button></div><div class="world-family"><span>👪 Family bond <b>${Math.round(game.family.closeness)}%</b></span><span>❤️ Partner <b>${game.player.partner?Math.round(game.player.partner.affection):'—'}</b></span><span>👶 Children <b>${game.player.children.length}</b></span></div>${game.player.partner?`<div class="compact-button-row"><button class="button small secondary" data-action="marry">${game.player.maritalStatus==='Engaged'?'Wedding':'Relationship'}</button><button class="button small ghost" data-action="have-child" ${game.player.maritalStatus!=='Married'||game.player.age<21?'disabled':''}>Have child</button></div>`:''}</div>`;
   }
-
-  function renderDead() { return `<section class="panel death-card"><div>🕯️</div><span class="eyebrow">LIFE COMPLETE</span><h1>${esc(game.player.name)}'s journey has ended.</h1><p>Your story lasted ${game.player.age} years. Your family, assets, companies and financial legacy remain recorded.</p><div class="metric-grid">${stat('Final net worth',fmt(netWorth()))}${stat('Companies',game.businesses.length)}${stat('Children',game.player.children.length)}${stat('Years lived',game.player.age)}</div><button class="button primary" data-action="new-life">Begin a new life</button><button class="button secondary" data-action="export-save">Export your legacy</button></section>`; }
+  function renderDead() { return `<div class="compact-board death-card"><div>🕯️</div><span class="eyebrow">LIFE COMPLETE</span><h1>${esc(game.player.name)}'s journey has ended.</h1><p>Your story lasted ${game.player.age} years. Your family, assets, companies and financial legacy remain recorded.</p><div class="metric-grid">${stat('Final net worth',fmt(netWorth()))}${stat('Companies',game.businesses.length)}${stat('Children',game.player.children.length)}${stat('Years lived',game.player.age)}</div><button class="button primary" data-action="new-life">Begin a new life</button><button class="button secondary" data-action="export-save">Export your legacy</button></div>`; }
   function render() {
     if(!game) return renderSetup();
-    if(!game.player.alive) { app.innerHTML=header()+`<main class="shell">${renderDead()}</main>`;return; }
-    const pages={home:renderHome,identity:renderIdentity,career:renderCareer,bank:renderBank,business:renderBusiness,world:renderWorld};
-    app.innerHTML=header()+`<main class="shell">${pages[activeTab]()}<footer class="footer-note">LIFE & EMPIRE v${BUILD} · Simulated economy · No live financial data</footer></main>`+tabNav();
-  }
-  function renderSetup() {
-    const old=oldSaveExists();
-    app.innerHTML=`<main class="setup-shell"><div class="setup-brand"><div class="brand-mark big">L<span>&</span>E</div><span class="eyebrow">A LIFE SIMULATION</span><h1>LIFE <em>&</em> EMPIRE</h1><p>Born into a world. Shape a life. Build a legacy.</p></div><section class="setup-card"><div class="section-head"><div><span class="eyebrow">CREATE YOUR CHARACTER</span><h2>Begin at birth</h2></div><span class="pill">India · ${START_YEAR}</span></div><form id="new-game-form"><label>Character name<input name="name" maxlength="28" required placeholder="Your character's name"></label><div class="form-grid"><label>Character presentation<select name="presentation"><option value="neutral">Neutral</option><option value="boy">Boy / male presentation</option><option value="girl">Girl / female presentation</option></select></label><label>Appearance style<select name="appearance"><option value="classic">Classic</option><option value="athletic">Sporty</option><option value="creative">Creative</option><option value="scholar">Scholar</option></select></label></div><label>Starting city<select name="city">${Object.entries(CITIES).map(([n,c])=>`<option value="${n}" ${n==='Hyderabad'?'selected':''}>${n}, ${c.state}</option>`).join('')}</select></label><label>Family background<select name="background"><option value="working">Working class · modest household</option><option value="middle" selected>Middle class · stable household</option><option value="affluent">Affluent · well-resourced household</option></select></label><label>Innate personality trait<select name="trait">${Object.entries(TRAITS).map(([id,t])=>`<option value="${id}" ${id==='curious'?'selected':''}>${t.emoji} ${t.name} — ${t.desc}</option>`).join('')}</select></label><label>Sibling at birth<select name="sibling"><option value="no">No sibling in household</option><option value="yes">One younger sibling (arrives later)</option></select></label><div class="notice">You begin at age zero. Your parents manage the household while you grow. Decisions become age-appropriate as you progress through childhood, school, adulthood and later life.</div><button class="button primary full">Create character & begin life →</button></form>${old?`<div class="warning-box"><b>Older save detected (v0.1.x)</b><p>Your previous save is stored separately and will not be overwritten by this new birth-to-legacy version. Export it from your old build before switching if you need a backup.</p></div>`:''}<p class="muted small center">Build ${BUILD} · Saves locally · Offline-capable · No account required</p></section><button class="button ghost" data-action="install-guide">Install this game on your phone</button></main>`;
+    if(!game.player.alive) { app.innerHTML=`<div class="game-frame">${header()}${hudStrip()}<main class="stage-view">${renderDead()}</main>${actionDock()}</div>`;return; }
+    const pages={home:renderHome,identity:renderIdentity,career:renderCareer,bank:renderBank,market:renderMarket,economy:renderEconomy,business:renderBusiness,world:renderWorld};
+    const page=pages[activeTab]||renderHome;
+    app.innerHTML=`<div class="game-frame">${header()}${hudStrip()}<main class="stage-view" aria-live="polite"><div class="stage-toolbar"><b>${({home:'Life dashboard',identity:'Character',career:'Education & career',bank:'Banking',market:'Stock market',economy:'Economic report',business:'Corporate empire',world:'World & society'})[activeTab]||'Life dashboard'}</b><span>${game.time.actionPoints} moves remaining</span></div><div class="stage-content">${page()}</div></main>${actionDock()}</div>`;
   }
 
-  function exportSave() { const blob=new Blob([JSON.stringify(game,null,2)],{type:'application/json'});const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download=`life-and-empire-${game.player.name.toLowerCase().replace(/[^a-z0-9]+/g,'-')}-${game.time.year}-q${game.time.quarter}.json`;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),1500);toast('Backup exported.'); }
-  function importSave(file) { if(!file)return;const r=new FileReader();r.onload=()=>{try{const s=JSON.parse(String(r.result));if(!validSave(s))throw new Error('This backup is not a compatible v0.2 save.');game=s;save();$('.modal-backdrop')?.remove();activeTab='home';render();toast('Save restored.');}catch(e){toast(e.message||'Could not restore backup.');}};r.onerror=()=>toast('Could not read file.');r.readAsText(file); }
+  function renderSetup() {
+    const old=oldSaveExists();
+    app.innerHTML=`<main class="setup-shell"><div class="setup-brand"><div class="brand-mark big">L<span>&</span>E</div><span class="eyebrow">A LIFE SIMULATION</span><h1>LIFE <em>&</em> EMPIRE</h1><p>Born into a world. Shape a life. Build a legacy.</p></div><section class="setup-card"><div class="section-head"><div><span class="eyebrow">CREATE YOUR CHARACTER</span><h2>Begin at birth</h2></div><span class="pill">India · ${START_YEAR}</span></div><form id="new-game-form"><label>Character name<input name="name" maxlength="28" required placeholder="Your character's name"></label><div class="form-grid"><label>Character presentation<select name="presentation"><option value="neutral">Neutral</option><option value="boy">Boy / male presentation</option><option value="girl">Girl / female presentation</option></select></label><label>Appearance style<select name="appearance"><option value="classic">Classic</option><option value="athletic">Sporty</option><option value="creative">Creative</option><option value="scholar">Scholar</option></select></label></div><label>Starting city<select name="city">${Object.entries(CITIES).map(([n,c])=>`<option value="${n}" ${n==='Hyderabad'?'selected':''}>${n}, ${c.state}</option>`).join('')}</select></label><label>Family background<select name="background"><option value="working">Working class · modest household</option><option value="middle" selected>Middle class · stable household</option><option value="affluent">Affluent · well-resourced household</option></select></label><label>Innate personality trait<select name="trait">${Object.entries(TRAITS).map(([id,t])=>`<option value="${id}" ${id==='curious'?'selected':''}>${t.emoji} ${t.name} — ${t.desc}</option>`).join('')}</select></label><label>Sibling at birth<select name="sibling"><option value="no">No sibling in household</option><option value="yes">One younger sibling (arrives later)</option></select></label><div class="notice">You begin at age zero. Your parents manage the household while you grow. Decisions become age-appropriate as you progress through childhood, school, adulthood and later life.</div><button class="button primary full">Create character & begin life →</button></form>${old?`<div class="warning-box"><b>Existing save detected</b><p>Your previous save is stored separately and will not be overwritten by this new birth-to-legacy version. Export it from your old build before switching if you need a backup.</p></div>`:''}<p class="muted small center">Build ${BUILD} · Saves locally · Offline-capable · No account required</p></section><button class="button ghost" data-action="install-guide">Install this game on your phone</button></main>`;
+  }
+
+  function exportSave() { const blob=new Blob([JSON.stringify(game,null,2)],{type:'application/json'});const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download=`life-and-empire-${game.player.name.toLowerCase().replace(/[^a-z0-9]+/g,'-')}-${game.time.year}-q${game.time.quarter}-v3.json`;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),1500);toast('Backup exported.'); }
+  function importSave(file) { if(!file)return;const r=new FileReader();r.onload=()=>{try{const s=JSON.parse(String(r.result));if(!validSave(s))throw new Error('This backup is not a compatible LIFE & EMPIRE save.');game=s;save();$('.modal-backdrop')?.remove();activeTab='home';render();toast('Save restored.');}catch(e){toast(e.message||'Could not restore backup.');}};r.onerror=()=>toast('Could not read file.');r.readAsText(file); }
   function installGuide() {
     if(deferredInstallPrompt) { deferredInstallPrompt.prompt(); deferredInstallPrompt.userChoice.then(choice=>{if(choice.outcome==='accepted')toast('Installation accepted. Look for LIFE & EMPIRE on your home screen.');deferredInstallPrompt=null;});return; }
     showModal('Install LIFE & EMPIRE on Android',`<div class="install-steps"><div class="install-step"><b>1</b><div><strong>Publish the new folder to GitHub Pages</strong><p>Upload the contents of this project to the repository root and enable HTTPS Pages.</p></div></div><div class="install-step"><b>2</b><div><strong>Open the published link in Chrome</strong><p>Use the HTTPS GitHub Pages URL, not the GitHub repository page or the downloaded index.html file.</p></div></div><div class="install-step"><b>3</b><div><strong>Install / Add to Home screen</strong><p>Tap Chrome ⋮ → Install app. If Chrome says “Add to Home screen”, choose that. The game opens in its own app-like window.</p></div></div><div class="notice">The install option appears only after the website is served over HTTPS with a valid web app manifest, icons and service worker. This build includes those files. Browser/Android policy decides the exact menu label.</div></div>`);
@@ -715,21 +888,22 @@
     const tab=event.target.closest('[data-tab]');if(tab){activeTab=tab.dataset.tab;render();return;}
     const btn=event.target.closest('[data-action]');if(!btn)return;
     const a=btn.dataset.action,id=btn.dataset.id;
-    if(a==='settings')return settingsModal();if(a==='install-guide')return installGuide();if(a==='close-modal')return btn.closest('.modal-backdrop')?.remove();
+    if(a==='settings')return settingsModal();if(a==='install-guide')return installGuide();if(a==='expand-bank')return ownBankBranchModal(id);if(a==='close-modal')return btn.closest('.modal-backdrop')?.remove();
     if(a==='export-save')return exportSave();if(a==='new-life')return newLife();if(a==='confirm-new-life'){game=null;localStorage.removeItem(SAVE_KEY);$('.modal-backdrop')?.remove();renderSetup();return;}
     if(a==='end-quarter')return endQuarterConfirm();if(a==='confirm-end-quarter'){ $('.modal-backdrop')?.remove();settleQuarter();return;}
     if(a==='life-action'){if(id==='study'&&game.player.age>=18)return studyFocusModal();return perform(id,{skill:btn.dataset.skill});}
     if(a==='jobs')return jobApplyModal();if(a==='apply-job')return applyJob(id);if(a==='college')return collegeModal();if(a==='postgrad')return showModal('Postgraduate study',`<form id="postgrad-form"><label>Course<select name="course"><option>Master of Business Administration</option><option>Master of Science</option><option>Master of Arts</option><option>Master of Technology</option></select></label><p class="muted">First instalment ₹35,000. Complete eight study quarters. This unlocks senior roles requiring education level 3.</p><button class="button primary">Enrol</button></form>`);if(a==='finish-college')return careerAction('finish-college');if(a==='promotion')return careerAction('promotion');if(a==='resign')return careerAction('resign');if(a==='marry')return marryOrPropose();if(a==='have-child')return haveChild();
-    if(a==='banking')return bankModal();if(a==='exchange')return showExchangeModal();if(a==='trade')return tradeModal(id);if(a==='invest-fund')return investModal('fund');if(a==='invest-gold')return investModal('gold');
+    if(a==='more-actions')return showModal('Available actions',`<div class="quick-action-list">${actionOptions().map(x=>`<button class="quick-action" data-action="life-action" data-id="${x[0]}" ${game.time.actionPoints<1||game.player.energy<x[4]?'disabled':''}><span>${x[1]}</span><b>${x[2]}</b><small>⚡ ${x[4]} energy · ${x[3]}</small></button>`).join('')}</div>`);if(a==='banking')return bankModal();if(a==='establish-bank')return establishBankModal();if(a==='manage-owned-bank')return ownedBankModal(id);if(a==='repay-own-bank')return ownBankRepayModal(btn.dataset.bankId,id);if(a==='exchange')return showExchangeModal();if(a==='trade')return tradeModal(id);if(a==='market-sort'){marketSort=['movers','price','dividend','name'].includes(id)?id:'movers';render();return;}if(a==='invest-fund')return investModal('fund');if(a==='invest-gold')return investModal('gold');
     if(a==='found-business')return businessStart(id);if(a==='new-business')return businessModal();if(a==='manage-business')return businessManageModal(id);if(a==='hire'||a==='fire'||a==='marketing'||a==='quality')return manageBusiness(a,{id});
-    if(a==='buy-property')return buyProperty(id);if(a==='property-market')return propertyModal();if(a==='move-city')return moveCity(id);
+    if(a==='buy-property')return buyProperty(id);if(a==='property-market')return propertyModal();if(a==='move-city')return moveCity(id);if(a==='move-selected-city'){const n=$('#city-select')?.value;if(n)return moveCity(n);}
     if(a==='repay-loan'){const loan=game.bank.loans.find(x=>x.id===id);if(!loan)return;showModal('Repay loan',`<form id="loan-repay-form"><input type="hidden" name="id" value="${id}"><label>Repayment amount<input name="amount" type="number" min="1" max="${Math.floor(loan.balance)}" required value="${Math.floor(loan.balance)}"></label><p class="muted">Outstanding: ${fmt(loan.balance)}</p><button class="button primary">Make repayment</button></form>`);return;}
-    if(a==='insurance'){if(!canAdult())return toast('Personal health cover unlocks at age 18.');if(game.bank.insurance)return toast('Health cover is already active.');const cost=18000;if(accountTotal()<cost)return toast(`Health cover costs ${fmt(cost)} for one simulated year.`);if(!consumeAction(1,2,1))return;spend(cost);game.bank.insurance=true;game.bank.insuranceQuarters=4;log('You purchased a basic health cover policy for the simulation year.','bank');save();render();return;}
+    if(a==='insurance'){if(!canAdult())return toast('Personal health cover unlocks at age 18.');if(game.bank.insurance)return toast('Health cover is already active.');const cost=18000;if(accountTotal()<cost)return toast(`Health cover costs ${fmt(cost)} for one simulated year.`);if(!consumeAction(1,2,1))return;spend(cost,'expense');game.bank.insurance=true;game.bank.insuranceQuarters=4;log('You purchased a basic health cover policy for the simulation year.','bank');save();render();return;}
   });
   app.addEventListener('submit',event=>{
     const f=event.target;event.preventDefault();const d=Object.fromEntries(new FormData(f).entries());
     if(f.id==='new-game-form')return createGame(d);
     if(f.id==='study-focus-form'){ $('.modal-backdrop')?.remove();return perform('study',{skill:d.skill}); }
+    if(f.id==='establish-bank-form'){const cost=8500000;if(!canAdult())return toast('You can establish a bank from age 18.');if(game.bank.ownedBanks.length>=3)return toast('You can own up to three banks in this build.');if(accountTotal()<cost)return toast(`You need ${fmt(cost)} in personal funding.`);if(!consumeAction(1,6,3))return;spend(cost,'investment');game.bank.ownedBanks.push({id:`ownbank-${Date.now()}`,name:String(d.name||'Dominion Bank').trim().slice(0,28),city:d.city||game.player.city,capital:5000000,cash:5000000,deposits:0,playerDeposits:0,publicLoanBook:0,playerLoans:[],loanRate:.018,depositRate:.035,profit:0,revenue:0,costs:0,fixedAssets:0,branches:1,trust:45,quarterHistory:[]});log(`You founded ${String(d.name||'Dominion Bank').trim()} in ${d.city}. The bank begins with ₹50 lakh paid-up capital.`, 'bank');$('.modal-backdrop')?.remove();save();render();return toast('Your bank has opened.');}if(f.id==='own-bank-deposit-form')return ownBankAction('deposit',d.amount,{bankId:d.bankId});if(f.id==='own-bank-withdraw-form')return ownBankAction('withdraw',d.amount,{bankId:d.bankId});if(f.id==='own-bank-loan-form')return ownBankAction('loan',d.amount,{bankId:d.bankId,term:d.term});if(f.id==='own-bank-rate-form')return ownBankAction('rate',0,{bankId:d.bankId,rate:Number(d.rate)/100});if(f.id==='own-bank-deposit-rate-form')return ownBankAction('deposit-rate',0,{bankId:d.bankId,rate:Number(d.rate)/100});if(f.id==='own-bank-branch-form')return ownBankAction('branch',1250000,{bankId:d.bankId});if(f.id==='own-bank-repay-form')return ownBankAction('repay',d.amount,{bankId:d.bankId,loanId:d.loanId});
     if(f.id==='bank-deposit-form')return bankAction('deposit',d.amount);
     if(f.id==='bank-withdraw-form')return bankAction('withdraw',d.amount);
     if(f.id==='bank-fd-form')return bankAction('fd',d.amount,d);

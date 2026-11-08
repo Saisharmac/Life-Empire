@@ -1,8 +1,8 @@
 {
   "id": "./",
-  "name": "LIFE & EMPIRE — Life Simulation",
+  "name": "LIFE & EMPIRE — Life & Business Simulator",
   "short_name": "Life & Empire",
-  "description": "An India-first life, family, education, banking, markets and business simulation.",
+  "description": "A compact India-first life, banking, investment, economic and business simulation.",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",
